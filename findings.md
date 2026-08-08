@@ -51,3 +51,45 @@ verdict run, or the claims column could inherit the same flattery.
 9 questions, 2 flagged `needs_user_confirm`. Sourcing is now two-track (PLAN §0.8):
 harvested (~6–8 usable stories, weak — the corpus self-corrects) and elicited (strong —
 auto-promote is the worked example). The elicited track needs the user and has one entry.
+
+---
+
+## 2026-08-08 — The stale sweep found a live operational gap
+
+Running `eval/elicit.py` against the guru corpus was meant to produce eval questions.
+It also surfaced a real, current defect, which is worth recording as evidence that
+design §6's stale sweep earns its promotion from "optional Phase 3 view" to core.
+
+**`sync_taxonomy.py` has not been run since 2026-08-01.** `concepts/taxonomy.toml`
+gained `contrition` (Julian of Norwich ingest, todo:7dc14fc3) and `dharma` + `bhakti`
+(Bhagavad Gita ingest, todo:e5b69653) on that date. All three exist as `concept.*`
+nodes in `data/guru.db`. **None has a row in `concept_family_membership`** — the
+newest concepts that do are the 2026-07-16 batch (astral_light, magical_equilibrium,
+magical_will). So three live concepts carry no domain/family placement.
+
+Not verified: whether the script still executes correctly. Only that the memberships
+are absent and it remains the designated tool.
+
+### Two corrections to the user's own recollection, both resolved from artifacts
+
+- *"the review python is unused… I use guru review web tool over Tailscale from other
+  devices"* — confirms `review_tags.py` / `review_edges.py` as category **B**, not C.
+  The practice of reviewing continues, but via a different tool entirely, and the
+  Tailscale-from-other-devices reason appears nowhere in the corpus.
+- *"sync_taxonomy… predates the domain family concept hierarchy"* — **inverted.** The
+  design docs landed 2026-05-26 08:36; the script landed the same day at 14:12 and
+  references domain/family 45 times. Its docstring cites `concept-hierarchy/design.md
+  §7`. It does not predate the hierarchy; it implements it.
+
+### A sharper staleness signal than "days quiet"
+
+The user's instinct — *"not sure if it still works as it predates X"* — is a better
+rule than elapsed time, and it is computable: **a claim asserted before a structural
+change to its subject, never reasserted after it, needs revalidation.** That is a
+graph query over `asserted_at` and schema-change events, not a timer. Worth building
+into the stale sweep rather than ranking on age alone.
+
+Here the rule fires correctly in the *opposite* direction: sync_taxonomy postdates the
+hierarchy, so the suspicion is discharged — and the actual defect (never run since a
+dependency changed) is a different rule: **an input changed after its consumer last
+ran.** `taxonomy.toml` edited 2026-08-01, `sync_taxonomy.py` last exercised 2026-05-26.
