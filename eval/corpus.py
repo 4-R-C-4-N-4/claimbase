@@ -15,12 +15,31 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import tomllib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-WORK = Path("/home/ivy/Work")
-REPOS = ("guru", "guru-web", "rellm")
+CORPORA = Path(__file__).resolve().parent.parent / "corpora"
+
+
+def load_corpus_def(name: str = "guru") -> dict:
+    """Read a named corpus definition. Sources are declared, never discovered —
+    a knowledge base is not a property of the current working directory."""
+    with (CORPORA / f"{name}.toml").open("rb") as fh:
+        spec = tomllib.load(fh)
+    for s in spec["source"]:
+        s["resolved"] = Path(s["path"]).expanduser()
+    return spec
+
+
+CORPUS = load_corpus_def()
+SOURCES = {s["name"]: s for s in CORPUS["source"]}
+REPOS = tuple(s["name"] for s in CORPUS["source"] if s["kind"] == "repo")
+
+
+def repo_path(name: str) -> Path:
+    return SOURCES[name]["resolved"]
 
 # Run-directory names carry their own timestamp: <name>-<ISO8601 with - for :>
 RUN_TS = re.compile(r"(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z|\d{8}T\d{6}Z)$")
@@ -77,7 +96,7 @@ def _parse_dir_ts(name: str) -> datetime | None:
 def git_first_seen(repo: str) -> dict[str, datetime]:
     """path -> date of the earliest commit touching it. One git call per repo."""
     out = subprocess.run(
-        ["git", "-C", str(WORK / repo), "log", "--reverse", "--format=@%cI", "--name-only"],
+        ["git", "-C", str(repo_path(repo)), "log", "--reverse", "--format=@%cI", "--name-only"],
         capture_output=True,
         text=True,
     ).stdout
@@ -113,7 +132,7 @@ def render_ticket(d: dict) -> str:
 def load_tickets() -> list[Record]:
     recs, skipped = [], []
     for repo in REPOS:
-        for p in sorted((WORK / repo).glob(".todo/*/*.json")):
+        for p in sorted(repo_path(repo).glob(".todo/*/*.json")):
             if p.name == "config.json":
                 continue
             try:
@@ -142,7 +161,7 @@ def load_tickets() -> list[Record]:
 def load_docs() -> list[Record]:
     recs = []
     for repo in REPOS:
-        root = WORK / repo
+        root = repo_path(repo)
         first = git_first_seen(repo)
         paths = sorted(root.glob("docs/**/*.md")) + sorted(root.glob("*.md"))
         for p in paths:
@@ -184,7 +203,7 @@ def load_runs() -> list[Record]:
     the most interesting thing in this source.
     """
     recs = []
-    bench = WORK / "rellm" / "runs" / "bench"
+    bench = repo_path("rellm") / "runs" / "bench"
     for d in sorted(p for p in bench.iterdir() if p.is_dir()):
         for fname, variant in (("report.txt", "teacher"), ("report_human.txt", "human")):
             report = d / fname

@@ -23,7 +23,7 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from corpus import WORK, Record, load_all  # noqa: E402
+from corpus import Record, load_all, repo_path  # noqa: E402
 from harvest import (  # noqa: E402
     RUN_TS_SUFFIX,
     parse_metrics,
@@ -39,7 +39,7 @@ OUT = Path(__file__).parent / "verified.md"
 
 def git(repo: str, *args: str) -> str:
     return subprocess.run(
-        ["git", "-C", str(WORK / repo), *args], capture_output=True, text=True
+        ["git", "-C", str(repo_path(repo)), *args], capture_output=True, text=True
     ).stdout
 
 
@@ -54,7 +54,7 @@ def survives_at_head(rec: Record, needle: str) -> tuple[bool, str]:
         return False, "file deleted"
     text = rec.path.read_text(errors="ignore")
     if needle and needle not in text:
-        rel = str(rec.path.relative_to(WORK / rec.repo))
+        rel = str(rec.path.relative_to(repo_path(rec.repo)))
         killed = git(rec.repo, "log", "-1", "--format=%h %ci %s", f"-S{needle}", "--", rel)
         return False, f"removed in place — {killed.strip()[:100] or 'unknown commit'}"
     return True, "still present at HEAD"
@@ -67,7 +67,7 @@ def eval_set(bench_dir: str) -> frozenset:
     same count of different things. cells.csv names the chunks, so comparability
     becomes a set comparison instead of an inference.
     """
-    p = WORK / "rellm" / "runs" / "bench" / bench_dir / "cells.csv"
+    p = repo_path("rellm") / "runs" / "bench" / bench_dir / "cells.csv"
     if not p.exists():
         return frozenset()
     import csv

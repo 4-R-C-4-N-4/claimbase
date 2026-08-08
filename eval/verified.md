@@ -40,9 +40,9 @@ exactly the confusion the v2-regression autopsy calls a measurement artifact.
 ### What is `src/middleware.ts` called / how is it referred to now?
 
 - **evidence:** `src/middleware.ts` → `src/proxy.ts` — “Root cause: a leftover Clerk-quickstart ./middleware.ts at repo root coexisted with the intended src/middleware.ts pass-through. The root fi”
+- **stale, retrievable today:** `guru-web:882d1657` (2026-05-10) — still present at HEAD
+- **stale, retrievable today:** `guru-web:docs/admin-ui/IMPL-admin-ui.md` (2026-05-01) — still present at HEAD
 - **stale, retrievable today:** `guru:docs/concept-hierarchy/guru-web-alignment.md` (2026-05-27) — still present at HEAD
-- **stale, retrievable today:** `guru-web:docs/admin-ui/BRD-admin-ui.md` (2026-05-01) — still present at HEAD
-- **stale, retrievable today:** `guru-web:docs/concept-hierarchy/IMPL-concept-hierarchy.md` (2026-05-27) — still present at HEAD
 
 
 ## S2 — doc lineage: 2 real of 2
@@ -58,11 +58,15 @@ exactly the confusion the v2-regression autopsy calls a measurement artifact.
 - **stale, retrievable today:** `rellm:docs/homology/findings.md` (2026-08-05) — still present at HEAD
 
 
-## S4 — explicit retraction: 0 real of 8
+## S4 — explicit retraction: 0 real of 9
 
 ### [rellm] 80-concept-teacher-run-retro: what did this revise?  *[RETRACTION CONFIRMED — pairing needs judgment]*
 
 - **evidence:** - 3089 chunks tagged, **0 errors**, 31 batches of 100 with steady ~4.5h/batch cadence. - ~161s/chunk on average — no degradation across the 138-hour run. - 11,473 tags proposed by the model. - DB outcome: 6665 inserted + 3806 superseded + 1002 skipped_reviewed = 11473 (matches log proposals exactly;
+
+### [guru] 10-tag-concepts: what did this revise?  *[RETRACTION CONFIRMED — pairing needs judgment]*
+
+- **evidence:** **`--resume` and `--supersede-pending` interacting badly on a re-run.** Read what they do before re-tagging a text that already has pending rows; the defaults are not always what a re-run wants.
 
 ### [guru-web] CORE_RULES-draft: what did this revise?  *[RETRACTION CONFIRMED — pairing needs judgment]*
 
@@ -72,7 +76,7 @@ exactly the confusion the v2-regression autopsy calls a measurement artifact.
 
 - **evidence:** The original ordering put Bug 1 first as "a one-line SELECT fix." That was wrong — see the Bug 1 verification: `chunks` has no `tier` column, so Bug 1 is a scoring redesign, not a one-liner, and it cannot be done in isolation from Bug 2. Revised order:
 - *lexical guess, unreliable:* `guru:docs/v2.md` (2026-04-17) — 4 shared identifiers — still present at HEAD
-- *lexical guess, unreliable:* `guru-web:docs/admin-ui/BRD-admin-ui.md` (2026-05-01) — 3 shared identifiers — still present at HEAD
+- *lexical guess, unreliable:* `guru:docs/guru-architecture.md` (2026-04-15) — 3 shared identifiers — still present at HEAD
 
 ### [rellm] edge-review-pass: what did this revise?  *[RETRACTION CONFIRMED — pairing needs judgment]*
 

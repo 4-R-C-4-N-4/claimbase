@@ -1,0 +1,62 @@
+# Named corpus: "guru"
+#
+# A corpus is a named knowledge base and the list of sources it is compiled from.
+# It lives here, in the claimbase repo, rather than being derived from a working
+# directory — more than one project lives in ~/Work, and a knowledge base is not
+# a property of where a shell happens to be. The name is the handle: `claimbase
+# import guru`, `claimbase recall --corpus guru`.
+#
+# Paths are the only machine-specific thing here and they are declared, not
+# discovered. Adapters are named per source: a source gets the adapters that fit
+# its shape, and nothing downstream knows which source a claim came from.
+
+name = "guru"
+description = "The guru project: corpus pipeline, web app, and the tagger fine-tunes."
+
+# --- repositories ------------------------------------------------------------
+
+[[source]]
+name = "guru"
+kind = "repo"
+path = "~/Work/guru"
+adapters = ["todo_store", "markdown_docs", "git_log"]
+
+[[source]]
+name = "guru-web"
+kind = "repo"
+path = "~/Work/guru-web"
+adapters = ["todo_store", "markdown_docs", "git_log"]
+
+[[source]]
+name = "rellm"
+kind = "repo"
+path = "~/Work/rellm"
+# No .todo store in this repo; the adapter list says so rather than the adapter
+# discovering it and silently contributing nothing.
+adapters = ["markdown_docs", "git_log", "run_artifacts"]
+
+# --- curated memory ----------------------------------------------------------
+# Hand-written, dated, already claim-shaped, and outside every repo above — so no
+# repo adapter reaches it. Authored by an agent and approved by the user, which is
+# neither of the two trust tiers the ticket store supplies; see PLAN.md §2.2.
+
+[[source]]
+name = "guru-memory"
+kind = "claude_memory"
+path = "~/.claude/projects/-home-ivy-Work-guru/memory"
+adapters = ["claude_memory"]
+trust = "agent_authored_human_gated"
+
+[[source]]
+name = "guru-web-memory"
+kind = "claude_memory"
+path = "~/.claude/projects/-home-ivy-Work-guru-web/memory"
+adapters = ["claude_memory"]
+trust = "agent_authored_human_gated"
+
+[[source]]
+name = "rellm-memory"
+kind = "claude_memory"
+path = "~/.claude/projects/-home-ivy-Work-rellm/memory"
+adapters = ["claude_memory"]
+trust = "agent_authored_human_gated"

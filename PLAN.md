@@ -14,6 +14,15 @@ hand-rolled ticket engine specific to this machine. Nothing downstream of the ad
 rather than asserted — an abstraction with one implementation is not an abstraction, and the
 three chosen differ in unit, provenance, and content shape rather than merely in file location.
 
+**Corpora are named, and the name is declared here, not derived from a directory.**
+`corpora/guru.toml` defines the corpus `guru` and lists its sources: the three repos plus their
+curated memory. More than one project lives in `~/Work`, so a knowledge base cannot be a property
+of the current working directory — `claimbase import guru` and `recall --corpus guru` work from
+anywhere. The design deferred multi-corpus support to Phase 4; the *registry* cannot be deferred,
+because without it every path is a hardcoded constant and the first thing anyone asks — "which
+sources is this answer drawn from?" — has no place to be answered. (Phase 4's actual content —
+packaging, other people's corpora — stays deferred.)
+
 ---
 
 ## 0. What the environment actually says
@@ -129,6 +138,29 @@ has two commits 20 minutes apart, `9f2a7995 16:05` then `be523169 16:25 "flip to
 rename)"`. Grep over the working tree can only say "no stale record survives." Git says the stale
 window was twenty minutes wide and names the commit that closed it.
 
+### 0.46 — Source E: curated memory (outside every repo)
+
+41 hand-written memory files, ~95 KB, under `~/.claude/projects/-home-ivy-Work-{guru,guru-web,
+rellm}/memory/` — 16 + 16 + 9. Dated, atomic, and already claim-shaped: *"Tagging stays v1;
+hierarchy is separate"*, *"No outsider-voice ethnography sources"*, *"Next 16 Turbopack silently
+ignores middleware.ts"*. That last one is the current answer to a stale-answer question the
+harvester found in the docs.
+
+It is the densest claim material on the machine and **no repo adapter reaches it**, because it
+lives outside all three repos. Its accuracy is good: `project_v3_cycle.md` states v2 F1 0.537,
+P .759 / R .415, matching the May 25 gauge run to three decimals.
+
+**It needs a third trust tier.** The ticket store supplies `human` and `agent`; memory is
+*agent-authored, human-gated* — written by a model, kept or deleted by the user. Treating it as
+`agent` understates it (the user approved every line); treating it as `human` overstates it (the
+phrasing and the inferences are the model's). The tier is declared in `corpora/guru.toml`, so the
+distinction lives in the corpus definition rather than being guessed by the adapter.
+
+Circularity is the honest risk: claimbase would extract claims from prose an LLM wrote about the
+same corpus it is compiling. That is tolerable for a source the user curates by deletion, but it
+means memory-derived claims must never outrank artifact-derived ones in a conflict — a
+supersession rule, not a prompt.
+
 ### 0.5 — Why all three together, and not any alone
 
 Docs are **declarative state**, tickets are **change events**, runs are **measurements**. The
@@ -242,7 +274,7 @@ field is a signal to generalize the field, not to special-case the adapter.
 | Source-specific thing | Generalized as |
 |---|---|
 | `analysis[].type` ∈ evidence/conclusion/… | adapter maps to core `claim_kind`; core never sees the ticket vocabulary |
-| `source.type: agent \| human` | adapter declares a **trust tier** per claim; core enforces the kind cap (a low-trust author cannot produce `fact`/`decision`) |
+| `source.type: agent \| human` | adapter declares a **trust tier** per claim; core enforces the kind cap (a low-trust author cannot produce `fact`/`decision`). Three tiers now: `human`, `agent`, `agent_authored_human_gated` (§0.46) — declared in the corpus definition, never inferred |
 | `relationships` key names | emitted as free text in `edges.rel`; canonicalization is schema emergence's job (§4.6), not the adapter's |
 | ticket `type`, `BRD-`/`IMPL-` prefixes | `schema_types` rows with `source: migrated` — identical treatment for both adapters |
 | `.todo/` layout, frontmatter keys | confined to `scan()` / `to_event()` |
@@ -355,8 +387,16 @@ no file-shaped unit, no LLM.
 - Merge commits and mechanical subjects are dropped, and the drop count is reported — a silent
   filter here would quietly hide a third of the source.
 
-*Exit for P0.2–4b:* `claimbase import --all` is idempotent, the conformance suite passes for all
-four adapters, per-source claim / entity / edge counts are reported, and **the git log shows no
+### P0.4c — Adapter E: `sources/claude_memory.py`
+
+- Unit = one memory file. Frontmatter (`name`, `description`, `metadata.type`) → structured
+  claims with no LLM; body prose → extraction; `[[wikilinks]]` → edges, and the only genuine
+  wiki-link entity seed in this corpus (§0.1's missing input, at small scale).
+- Trust tier `agent_authored_human_gated`, read from the corpus definition (§0.46).
+- `MEMORY.md` is an index, not content — skipped, and the skip is reported.
+
+*Exit for P0.2–4c:* `claimbase import guru` is idempotent, the conformance suite passes for all
+five adapters, per-source claim / entity / edge counts are reported, and **the git log shows no
 commit touching `claimbase/core/` while B and C were written**. That last one is the agnosticism
 evidence, and it is free to collect.
 
