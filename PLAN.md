@@ -231,6 +231,46 @@ teacher; don't reimplement model launching.
 
 ---
 
+### 0.8 — The staleness that matters is invisible to the corpus (2026-08-08)
+
+Harvesting produced ~6–8 usable stale-answer stories, not the ≥12 target, and four candidates
+died the same way: **this corpus corrects in place.** `staged_tag_id` was renamed and the doc
+revised twenty minutes later; both halves of the CORE_RULES/VOICE-woowoo pair already say the
+list moved; `retriever-hitlist` narrates its own revision in a single commit. Well-maintained
+repos do not leave stale answers lying around.
+
+Then the user supplied one the harvester could never find:
+
+> *"I never use autopromote anymore — automated review from guru-review with Fable or Opus beats
+> it every time."*
+
+The corpus asserts the opposite in 8+ places (`docs/autopromote/design.md`,
+`docs/ingest/13-propose-edges.md` — written the night before —, `docs/web-review/edges.md`,
+`scripts/auto_promote_edges.sh`), and guru's curated memory records it as a *standing workflow*
+with detailed rationale. **No retraction exists anywhere.** No doc, no ticket, no commit message.
+
+This inverts the plan's model of staleness. Doc-versus-doc contradiction is the *easy* case and
+this corpus mostly self-heals it. The dangerous case is **abandoned practice that was never
+written down** — where the corpus is uniformly, confidently wrong and contains no internal
+evidence of it.
+
+Three consequences:
+
+1. **Gold-set sourcing changes.** Harvested corrections are the weak source. The strong source is
+   elicitation: *"what does the corpus still assert that you have stopped doing?"* The gold answer
+   comes from the user, not from a later artifact. P0.0 is updated accordingly.
+2. **§4.5 contradiction detection cannot catch this** — there is no contradicting claim, only an
+   absence. The mechanism that catches it is the design's §6 **stale sweep** (old `asserted_at`,
+   no recent corroboration, on an active entity), currently listed as an optional Phase 3 view.
+   It should be treated as core, not optional: it addresses the actual failure mode.
+3. **It is an argument for the capture path, not just the compiler.** This correction came into
+   existence in a conversation. Had `assert()` (design §5) existed, that exchange would have
+   written it into the log. A compiler cannot compile what was never captured.
+
+Same pattern, second instance: the user notes the rellm v2 regression was also driven by DB
+assumptions about the corpus and a VRAM-restricted training set — a factor the autopsy, which
+concludes "not a training problem," does not cover. That correction is also nowhere in the corpus.
+
 ## 1. Phase 0 objective, restated as a falsifiable test
 
 Phase 0 passes only if, on a held-out question set over the guru corpus:
@@ -335,9 +375,15 @@ Per Risk §10.1, the first milestone builds nothing that extracts anything.
   repos, both authorship tiers, all six ticket types. Structured fields are *not* graded — they
   compile deterministically and serve as ground truth instead. **Over-sample rellm research
   prose** — it is the material most likely to be mis-typed as `fact` (§5).
-- `eval/gold_recall.jsonl` — 25–35 questions with gold source spans, ≥12 of them stale-answer
-  questions per §1. Harvest candidates by grouping tickets and docs on shared file paths and
-  symbols, then reading the timelines; `staged_tag_id → target_id` is the worked example.
+- `eval/gold_recall.jsonl` — 25–35 questions with gold source spans, from **two** sources now
+  (§0.8):
+  - *harvested* — `eval/harvest.py` → `eval/verify.py`, ~6–8 usable stories. Weak, because the
+    corpus self-corrects most of what it records.
+  - *elicited* — practices the user has abandoned that the corpus still asserts. Gold answer is
+    user-supplied; the corpus contains no evidence either way. Auto-promote is the worked
+    example: 8+ live records assert it, zero record its abandonment. These are the questions
+    Phase 0 should actually be judged on, because chunk-RAG cannot get them right by any route
+    and neither can a claim graph without a staleness signal.
 - `claimbase eval extract` → precision / recall / hallucination-rate. Match is fuzzy: embedding
   cosine ≥ τ **and** exact `claim_kind`. Hallucination = claim unsupported by its span.
 - `claimbase eval recall` → nDCG@10, answer-supported-rate, **stale-answer rate**, against `rg`
