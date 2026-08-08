@@ -166,6 +166,12 @@ def cmd_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_review(args: argparse.Namespace) -> int:
+    from .review.server import serve
+
+    return serve(args.host, args.port, args.limit)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="claimbase")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -178,6 +184,11 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("stats", help="what is in the store")
     p.add_argument("--corpus", default="guru")
     p.set_defaults(fn=cmd_stats)
+    p = sub.add_parser("review", help="serve the review queue (grading, conflicts, tensions)")
+    p.add_argument("--host", default="0.0.0.0", help="0.0.0.0 so it is reachable over Tailscale")
+    p.add_argument("--port", type=int, default=8760)
+    p.add_argument("--limit", type=int, default=60)
+    p.set_defaults(fn=cmd_review)
     args = ap.parse_args(argv)
     return args.fn(args)
 

@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>claimbase · review</title>
+<style>
+  :root{
+    --bg:#faf9f7; --fg:#1b1a18; --dim:#6b6862; --line:#e2ded7; --card:#fff;
+    --accent:#7a5cff; --ok:#1f8a5b; --warn:#b4530a;
+    --k1:#7a5cff;--k2:#1f8a5b;--k3:#b4530a;--k4:#0d7ac7;--k5:#a3238e;
+    --k6:#5b6470;--k7:#8a7a1f;--k8:#c23b3b;--k9:#3f7d7d;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+    --bg:#16151a; --fg:#eceaf2; --dim:#9a96a5; --line:#2c2a33; --card:#1e1d24;
+  }}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    -webkit-text-size-adjust:100%}
+  header{position:sticky;top:0;z-index:5;background:var(--bg);
+    border-bottom:1px solid var(--line);padding:.7rem 1rem;
+    display:flex;gap:.9rem;align-items:baseline;flex-wrap:wrap}
+  h1{font-size:.82rem;margin:0;letter-spacing:.09em;text-transform:uppercase;color:var(--dim);font-weight:600}
+  .bar{flex:1;min-width:120px;height:5px;background:var(--line);border-radius:3px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--accent);transition:width .3s}
+  .count{font-variant-numeric:tabular-nums;color:var(--dim);font-size:.82rem}
+  main{max-width:760px;margin:0 auto;padding:1rem 1rem 8rem}
+  .src{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dim);
+    word-break:break-all;margin-bottom:.8rem}
+  .s{background:var(--card);border:1px solid var(--line);border-left:3px solid transparent;
+    border-radius:9px;padding:.7rem .85rem;margin-bottom:.5rem;cursor:pointer;
+    transition:border-color .12s,transform .08s}
+  .s:active{transform:scale(.995)}
+  .s.sel{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 22%,transparent)}
+  .s .tag{display:none;font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;
+    font-weight:700;margin-bottom:.3rem}
+  .s[data-k] .tag{display:block}
+  .s[data-k]{border-left-color:var(--kc)}
+  .s .tag{color:var(--kc)}
+  .kinds{position:fixed;left:0;right:0;bottom:0;background:var(--card);
+    border-top:1px solid var(--line);padding:.6rem .7rem calc(.6rem + env(safe-area-inset-bottom));
+    display:flex;gap:.4rem;overflow-x:auto;align-items:center}
+  .kinds button{flex:0 0 auto;border:1px solid var(--line);background:transparent;color:var(--fg);
+    border-radius:999px;padding:.45rem .75rem;font-size:.8rem;cursor:pointer;white-space:nowrap}
+  .kinds button b{color:var(--dim);font-weight:600;margin-right:.3rem;font-variant-numeric:tabular-nums}
+  .kinds button:hover{border-color:var(--accent)}
+  .act{margin-left:auto;display:flex;gap:.4rem;flex:0 0 auto}
+  .act button{border-radius:9px;font-weight:600}
+  .act .go{background:var(--ok);border-color:var(--ok);color:#fff}
+  .act .skip{color:var(--dim)}
+  .done{text-align:center;padding:4rem 1rem;color:var(--dim)}
+  .done b{color:var(--fg);font-size:1.1rem;display:block;margin-bottom:.6rem}
+  kbd{font:11px ui-monospace,monospace;border:1px solid var(--line);border-bottom-width:2px;
+    border-radius:4px;padding:.05rem .3rem;color:var(--dim)}
+  .hint{color:var(--dim);font-size:.78rem;margin:.9rem 0 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>claimbase · grade</h1>
+  <div class="bar"><i id="fill" style="width:0"></i></div>
+  <span class="count" id="count">…</span>
+</header>
+
+<main id="main"></main>
+
+<div class="kinds" id="kinds" hidden></div>
+
+<script>
+const KCOL = ["--k1","--k2","--k3","--k4","--k5","--k6","--k7","--k8","--k9"];
+let items = [], kinds = [], idx = 0, sel = 0, marks = {};
+
+async function load(){
+  const r = await fetch("/api/queue").then(r=>r.json());
+  items = r.items; kinds = r.kinds; progress(r.progress);
+  buildKinds(); render();
+}
+function progress(p){
+  document.getElementById("fill").style.width = (100*p.done/Math.max(p.total,1))+"%";
+  document.getElementById("count").textContent = `${p.done}/${p.total}`;
+}
+function buildKinds(){
+  const el = document.getElementById("kinds"); el.innerHTML = "";
+  kinds.forEach((k,i)=>{
+    const b = document.createElement("button");
+    b.innerHTML = `<b>${i+1}</b>${k}`;
+    b.onclick = ()=>mark(i+1);
+    el.appendChild(b);
+  });
+  const act = document.createElement("div"); act.className="act";
+  act.innerHTML = `<button class="skip" id="bskip">skip</button>
+                   <button class="go" id="bgo">submit ⏎</button>`;
+  el.appendChild(act);
+  el.hidden = false;
+  document.getElementById("bgo").onclick = ()=>submit("graded");
+  document.getElementById("bskip").onclick = ()=>submit("skip");
+}
+function render(){
+  const m = document.getElementById("main");
+  if(idx >= items.length){
+    document.getElementById("kinds").hidden = true;
+    m.innerHTML = `<div class="done"><b>Queue empty.</b>
+      Nothing left to grade in this batch.<br>
+      <span class="hint">POST /api/export writes eval/gold_extract.jsonl</span></div>`;
+    return;
+  }
+  const it = items[idx]; marks = {}; sel = 0;
+  m.innerHTML = `<div class="src">${it.payload.source} · ${esc(it.payload.source_ref)}</div>` +
+    it.payload.sentences.map((s,i)=>
+      `<div class="s" data-i="${i}"><span class="tag"></span>${esc(s)}</div>`).join("") +
+    `<p class="hint"><kbd>j</kbd>/<kbd>k</kbd> move · <kbd>1</kbd>–<kbd>9</kbd> mark kind ·
+      <kbd>0</kbd> clear · <kbd>⏎</kbd> submit · <kbd>s</kbd> skip.
+      Leave a sentence unmarked if it is not a claim — the negatives matter as much as the marks.</p>`;
+  m.querySelectorAll(".s").forEach(el=>{
+    el.onclick = ()=>{ sel = +el.dataset.i; paint(); };
+  });
+  paint();
+}
+function paint(){
+  document.querySelectorAll(".s").forEach((el,i)=>{
+    el.classList.toggle("sel", i===sel);
+    const k = marks[i];
+    if(k){ el.dataset.k = k; el.style.setProperty("--kc", `var(${KCOL[kinds.indexOf(k)%9]})`);
+           el.querySelector(".tag").textContent = k; }
+    else { delete el.dataset.k; el.querySelector(".tag").textContent = ""; }
+  });
+  const cur = document.querySelector(".s.sel");
+  if(cur) cur.scrollIntoView({block:"nearest"});
+}
+function mark(n){
+  const k = kinds[n-1]; if(!k) return;
+  marks[sel] = k; sel = Math.min(sel+1, items[idx].payload.sentences.length-1); paint();
+}
+async function submit(verdict){
+  const it = items[idx];
+  const r = await fetch("/api/decision",{method:"POST",headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({item_id: it.id, verdict, payload:{marks}})}).then(r=>r.json());
+  progress(r.progress); idx++; render();
+}
+function esc(s){ return s.replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+addEventListener("keydown", e=>{
+  if(idx>=items.length) return;
+  const n = items[idx].payload.sentences.length;
+  if(e.key==="j"||e.key==="ArrowDown"){ sel=Math.min(sel+1,n-1); paint(); e.preventDefault(); }
+  else if(e.key==="k"||e.key==="ArrowUp"){ sel=Math.max(sel-1,0); paint(); e.preventDefault(); }
+  else if(/^[1-9]$/.test(e.key)) mark(+e.key);
+  else if(e.key==="0"){ delete marks[sel]; paint(); }
+  else if(e.key==="Enter") submit("graded");
+  else if(e.key==="s") submit("skip");
+});
+load();
+</script>
+</body>
+</html>
