@@ -97,6 +97,38 @@ It also supplies the purest bitemporal claims in the corpus. *"v2 F1 = 0.443 on 
 bench"* is a measurement with an exactly-known assertion date; the same metric restated by a
 later run is supersession with **no inference required** — the ground truth is the timestamp.
 
+### 0.45 — Source D: git history (overlooked in the first draft of this plan)
+
+An early check asked whether ticket *files* were committed repeatedly, found they weren't, and
+wrote git off. That was the wrong question, and it cost two things:
+
+**D1 — Commit messages are a source.** 1,684 commits across the three repos (755 guru, 909
+guru-web, 20 rellm) carrying **~503 KB of message prose** — comparable in volume to the entire
+ticket corpus, and previously ingested at zero. 586 of guru's are `todo:`-prefixed and link
+directly to ticket ids; the rest are dense dated claims in their own right
+(*"corpus: mandaean body cleanups drained by review apply (37 chunks, wrap-normalization +
+token_count)"*). Unit = a commit; provenance = the SHA; trust tier = the committer; entity
+mentions = the changed paths. It is a fourth adapter shape: no file of its own, no body text
+beyond the message, and a built-in edge to every path it touched.
+
+**D2 — Diffs supply exact `valid_to`, which is otherwise the hardest field in the model.**
+36 markdown files have multi-commit revision chains. `git log -S<symbol> -- <path>` reports the
+commit where a claim's supporting text *disappeared* — so a claim extracted from revision N gets
+`valid_to` = the timestamp of revision N+1 that removed it. Design §4.4 says a guessed valid-time
+is a lie with a timestamp and null is honest; git converts a large class of those nulls into
+**recorded fact**. This is the single biggest temporal win available in this corpus and the first
+draft of the plan missed it entirely.
+
+Consequence for Adapter B (§3): a doc is not one event. Each revision is its own event
+(`path@sha1`, `path@sha2`, …), which is both more faithful to append-only capture and what makes
+D2 work. It also resolves the harvester's ⚠ same-day ordering problem — commit order is total,
+even when dates tie.
+
+Worked example, the case the harvester got right for the wrong reason: `docs/web-review/edges.md`
+has two commits 20 minutes apart, `9f2a7995 16:05` then `be523169 16:25 "flip to Option B (full
+rename)"`. Grep over the working tree can only say "no stale record survives." Git says the stale
+window was twenty minutes wide and names the commit that closed it.
+
 ### 0.5 — Why all three together, and not any alone
 
 Docs are **declarative state**, tickets are **change events**, runs are **measurements**. The
@@ -283,8 +315,10 @@ Per Risk §10.1, the first milestone builds nothing that extracts anything.
 Written against the same contract, ideally by a different pass of attention than A, because its
 job is to find where the contract is secretly todo-shaped.
 
-- One event per doc under ~4 KB; longer docs split at H2 with heading path retained in `meta`.
-  `captured_at` = first commit touching the path; `source_ref` = `path@sha`.
+- **One event per doc *revision*, not per doc** (§0.45 D2). `source_ref` = `path@sha`,
+  `captured_at` = that commit's date. Longer docs split at H2 with heading path in `meta`.
+- Claims whose supporting text is removed by a later revision get `valid_to` from that commit —
+  recorded, not inferred. This is the adapter's most valuable output and it is pure bookkeeping.
 - Structured → claims: title and heading-path claims only. Docs are prose — this adapter
   deliberately contributes *little* structured signal, which is exactly what stress-tests a seam
   designed around a structure-rich source.
@@ -310,8 +344,19 @@ real; if C forces a core change, better to learn it now than at Phase 1.
 - Contributes **zero prose** to extraction — deliberately. An adapter with no prose at all is the
   cleanest check that the pipeline does not assume every source feeds the extractor.
 
-*Exit for P0.2–4:* `claimbase import --all` is idempotent, the conformance suite passes for all
-three adapters, per-source claim / entity / edge counts are reported, and **the git log shows no
+### P0.4b — Adapter D: `sources/git_log.py`
+
+Added after git was found to have been overlooked (§0.45). Small: one `git log` parse per repo,
+no file-shaped unit, no LLM.
+
+- Unit = one commit. `source_ref` = `<repo>@<sha>`; `captured_at` = commit date; trust tier from
+  the committer. Subject → claim; body → prose for extraction; changed paths → entity mentions;
+  `todo:<id>` prefixes → edges to ticket claims, closing the loop between A and D.
+- Merge commits and mechanical subjects are dropped, and the drop count is reported — a silent
+  filter here would quietly hide a third of the source.
+
+*Exit for P0.2–4b:* `claimbase import --all` is idempotent, the conformance suite passes for all
+four adapters, per-source claim / entity / edge counts are reported, and **the git log shows no
 commit touching `claimbase/core/` while B and C were written**. That last one is the agnosticism
 evidence, and it is free to collect.
 
