@@ -61,7 +61,17 @@ def check_source(src: Source) -> dict:
         )
         assert c.event_id in {e.id for e in events}, f"{src.name}: claim with dangling event_id"
 
+    # Every contract method gets called, including the ones an adapter is likely
+    # to omit. This suite missed `declared_types` once and the omission surfaced
+    # as an AttributeError mid-import instead of a red test.
+    for method in ("scan", "to_event", "structured_claims", "entity_mentions", "edges", "declared_types"):
+        assert callable(getattr(src, method, None)), f"{src.name}: missing {method}()"
+    types = list(src.declared_types())
+    for t_ in types:
+        assert t_.name and t_.kind, f"{src.name}: malformed schema type"
+
     return {
+        "types": len(types),
         "units": len(units),
         "events": len(events),
         "skipped": skipped,

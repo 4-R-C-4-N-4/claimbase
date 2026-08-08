@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Iterable, Iterator
 
 from ..core.contract import REGISTRY
-from ..core.models import Claim, Edge, Event, Kind, Mention, Trust
+from ..core.models import Claim, Edge, Event, Kind, Mention, SchemaType, Trust
 from ..core.trust import apply_cap
 
 TODO_REF = re.compile(r"\btodo/([0-9a-f]{6,})\b|\btodo:([0-9a-f]{6,})\b")
@@ -115,6 +115,10 @@ class PullRequests:
         refs = {a or b for a, b in TODO_REF.findall(event.content + " " + m.get("branch", ""))}
         for tid in refs - {""}:
             yield Edge(src=src, dst=f"ticket:{m['repo']}:{tid}", rel="references_ticket")
+
+
+    def declared_types(self) -> Iterable[SchemaType]:
+        return ()
 
 
 def build(repos: dict[str, Path], corpus: str = "guru", cache: Path | None = None) -> PullRequests:

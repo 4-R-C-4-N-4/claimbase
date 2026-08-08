@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Iterable, Iterator
 
 from ..core.contract import REGISTRY
-from ..core.models import Claim, Edge, Event, Kind, Mention, Trust
+from ..core.models import Claim, Edge, Event, Kind, Mention, SchemaType, Trust
 from ..core.trust import apply_cap
 
 TODO_REF = re.compile(r"\btodo:([0-9a-f]{6,})\b")
@@ -120,6 +120,12 @@ class GitLog:
             yield Edge(src=src, dst=f"ticket:{m['repo']}:{tid}", rel="references_ticket")
         for p in m["paths"][:40]:
             yield Edge(src=src, dst=f"path:{m['repo']}:{p}", rel="touched")
+
+
+    def declared_types(self) -> Iterable[SchemaType]:
+        """Commit messages encode no convention worth promoting to a type. Stated
+        explicitly rather than inherited: structural typing gives no defaults."""
+        return ()
 
 
 def build(repos: dict[str, Path], corpus: str = "guru") -> GitLog:

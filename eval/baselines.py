@@ -152,6 +152,60 @@ def chunk_search(question: str, chunks: list[dict], mat, k: int = 10) -> list[tu
     return sorted(best.items(), key=lambda kv: -kv[1])[:k]
 
 
+# --- the system under test: claims ------------------------------------------
+
+DSN = "postgresql://claimbase:claimbase@localhost:5433/claimbase"
+
+_TICKET = re.compile(r"^(?P<repo>[\w-]+):\.todo/\w+/(?P<id>\w+)\.json")
+_DOC = re.compile(r"^(?P<repo>[\w-]+):(?P<path>[^@]+)")
+_RUN = re.compile(r"^rellm:runs/bench/(?P<dir>[^#]+)#(?P<variant>\w+)")
+
+
+def to_gold_ref(source_ref: str) -> str:
+    """Map an event's provenance onto the gold set's naming convention.
+
+    The gold refs were written against eval/corpus.py's record ids, which predate
+    the adapters. Normalising here rather than rewriting the gold set keeps the
+    questions independent of how the pipeline happens to spell provenance today.
+    """
+    if m := _RUN.match(source_ref):
+        return f"rellm:{m['dir']}#{m['variant']}"
+    if m := _TICKET.match(source_ref):
+        return f"{m['repo']}:{m['id']}"
+    ref = source_ref.split("#")[0]
+    if m := _DOC.match(ref):
+        return f"{m['repo']}:{m['path']}"
+    return source_ref
+
+
+def claim_search(question: str, k: int = 10, active_only: bool = True) -> list[tuple[str, float]]:
+    """Vector search over claims, folded back to source records.
+
+    Deliberately the plainest possible version: no graph expansion, no validity
+    filtering beyond active-only. If claims beat chunk-RAG here it is the atomicity
+    and the provenance doing the work, not clever retrieval on top.
+    """
+    import psycopg
+
+    q = embed([question])[0]
+    sql = """
+        SELECT e.source_ref, c.claim_kind, c.trust, c.valid_to,
+               1 - (c.embedding <=> %s::vector) AS sim
+        FROM claims c JOIN events e ON e.id = c.event_id
+        WHERE c.embedding IS NOT NULL {where}
+        ORDER BY c.embedding <=> %s::vector
+        LIMIT %s
+    """.format(where="AND c.status = 'active'" if active_only else "")
+    with psycopg.connect(DSN) as conn, conn.cursor() as cur:
+        cur.execute(sql, (str(q), str(q), k * 12))
+        rows = cur.fetchall()
+    best: dict[str, float] = {}
+    for source_ref, _kind, _trust, _valid_to, sim in rows:
+        ref = to_gold_ref(source_ref)
+        best[ref] = max(best.get(ref, 0.0), float(sim))
+    return sorted(best.items(), key=lambda kv: -kv[1])[:k]
+
+
 # --- scoring -----------------------------------------------------------------
 
 
@@ -204,6 +258,7 @@ def main() -> None:
         gold_set, stale_set = set(g["gold_refs"]), set(g["stale_refs"])
         r_rg = [ref for ref, _ in rg_search(g["question"], args.k)]
         r_ch = [ref for ref, _ in chunk_search(g["question"], chunks, mat, args.k)]
+        r_cl = [ref for ref, _ in claim_search(g["question"], args.k)]
         rows.append(
             {
                 "id": g["id"],
@@ -212,6 +267,8 @@ def main() -> None:
                 "ch_ndcg": ndcg(r_ch, gold_set, args.k),
                 "rg_stale": stale_wins(r_rg, stale_set, gold_set, args.k),
                 "ch_stale": stale_wins(r_ch, stale_set, gold_set, args.k),
+                "cl_ndcg": ndcg(r_cl, gold_set, args.k),
+                "cl_stale": stale_wins(r_cl, stale_set, gold_set, args.k),
             }
         )
     unload_model()
@@ -220,20 +277,24 @@ def main() -> None:
         vals = [r[key] for r in rows if r[key] is not None and r[key] == r[key]]
         return sum(vals) / len(vals) if vals else float("nan")
 
-    print(f"\n{'id':<6} {'class':<13} {'rg nDCG':>8} {'chunk nDCG':>11} {'rg mislead':>10} {'ch mislead':>10}")
-    print("-" * 62)
+    hdr = (f"\n{'id':<6} {'class':<13} {'rg':>6} {'chunk':>7} {'claims':>7}   "
+           f"{'rg~':>5} {'ch~':>5} {'cl~':>5}")
+    print(hdr)
+    print("-" * 64)
     for r in rows:
         f = lambda v: "  —  " if v is None or v != v else f"{v:.3f}"  # noqa: E731
         print(
-            f"{r['id']:<6} {r['class']:<13} {f(r['rg_ndcg']):>8} {f(r['ch_ndcg']):>11} "
-            f"{f(r['rg_stale']):>9} {f(r['ch_stale']):>9}"
+            f"{r['id']:<6} {r['class']:<13} {f(r['rg_ndcg']):>6} {f(r['ch_ndcg']):>7} "
+            f"{f(r['cl_ndcg']):>7}   {f(r['rg_stale']):>5} {f(r['ch_stale']):>5} "
+            f"{f(r['cl_stale']):>5}"
         )
-    print("-" * 62)
+    print("-" * 64)
     print(
-        f"{'MEAN':<20} {avg('rg_ndcg'):>8.3f} {avg('ch_ndcg'):>11.3f} "
-        f"{avg('rg_stale'):>9.3f} {avg('ch_stale'):>9.3f}"
+        f"{'MEAN':<20} {avg('rg_ndcg'):>6.3f} {avg('ch_ndcg'):>7.3f} {avg('cl_ndcg'):>7.3f}   "
+        f"{avg('rg_stale'):>5.3f} {avg('ch_stale'):>5.3f} {avg('cl_stale'):>5.3f}"
     )
-    print("\nclaims column: empty until P0.5. Lower stale-rate is better.")
+    print("\nnDCG: higher is better.  ~ = mislead-rate: lower is better.")
+    print("claims = STRUCTURED ONLY; no prose extraction yet (P0.5).")
     Path(__file__).parent.joinpath("results-baselines.json").write_text(json.dumps(rows, indent=2))
 
 

@@ -131,3 +131,56 @@ rules make it much sharper than a timer, but for artifact-invisible practice the
 signal is asking. Which is an argument for the capture path (§5 `assert()`) rather than
 for a better sweep — the sweep cannot see what was never written, and the fix is to make
 writing cheap, not to infer harder.
+
+---
+
+## 2026-08-08 — First claims reading: structured-only loses to chunk-RAG
+
+Five adapters built, corpus compiled, 4,141 claims embedded. The scoreboard with
+the claims column filled — **structured claims only, no prose extraction yet**:
+
+| | rg | chunk-RAG | claims (structured) |
+|---|---|---|---|
+| nDCG@10 | 0.303 | **0.667** | 0.225 |
+| mislead-rate | 0.500 | **0.333** | 0.500 |
+
+Claims lose on both axes. The plan called for reporting with and without
+prose-extracted claims precisely so the two contributions stay separable, and the
+"without" run answers a real question: **structure alone is not enough.** Had it
+won, Phase 3's fine-tuning would have been unfunded; it did not, so the extraction
+path is load-bearing rather than decorative.
+
+### Why, measured rather than guessed
+
+Average claim length by source:
+
+| source | claims | avg chars |
+|---|---|---|
+| git_log | 1,503 | 56 |
+| todo_store | 1,424 | 231 |
+| markdown_docs | 871 | 70 |
+| pull_requests | 165 | 66 |
+| run_artifacts | 140 | 65 |
+| agent_memory | 38 | 129 |
+
+**2,679 of 4,141 claims (65%) average under 70 characters** — commit subjects, PR
+titles, doc headings, metric rows. Meanwhile the 1.16 MB of *doc prose* that answers
+most gold questions is not in the claim index at all: the docs adapter contributes
+only heading claims by design, and extraction has not run. chunk-RAG reads all of
+it. The comparison right now is a title index against full text, and full text wins.
+
+### One genuine win, exactly where predicted
+
+**q005 — "what was v1's recall on the 130-chunk gauge?" — 0.000 → 0.431.** Both
+baselines score zero because a table of numbers carries no semantic signal; the
+run-artifacts adapter turns those tables into textual metric claims and makes them
+retrievable. That is the tabular-invisibility gap closing, and it is the one result
+that could not have come from better chunking.
+
+### A design question this raises
+
+The 871 `"<path> documents <heading>"` claims are near-contentless and compete for
+rank with substantive ones. Indexing every structural claim may be actively harmful
+to retrieval even when it is correct to *store* it. Worth deciding in P0.5 whether
+low-content structural claims belong in the vector index at all, or only in the
+graph.
