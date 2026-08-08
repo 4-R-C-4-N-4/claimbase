@@ -1,0 +1,25 @@
+# Harness profile: claude
+#
+# A harness profile says where an agent harness keeps its durable artifacts and
+# in what shape. Corpora reference a harness by name and supply a scope; the
+# adapter reads the profile to know how to parse. Adding a harness should be a
+# profile plus, at most, one format reader — never a change to core.
+
+name = "claude"
+
+[memory]
+layout = "file_per_fact"          # one durable fact per file
+root = "~/.claude/projects/{scope}/memory"
+glob = "*.md"
+index = "MEMORY.md"               # an index of the others, not content — skipped
+frontmatter = "yaml"              # name, description, metadata.type
+links = "wikilink"                # [[other-memory-name]] → edges
+scoping = "path"                  # scope is a directory key derived from a cwd
+
+[sessions]
+layout = "jsonl_files"
+root = "~/.claude/projects/{scope}"
+glob = "*.jsonl"
+scoping = "path"
+# Per-line records; human turns are `type: user` minus isMeta/tool-result/
+# local-command lines. Carries cwd, gitBranch, timestamp, sessionId.

@@ -1,0 +1,33 @@
+# Harness profile: hermes
+#
+# The reason harness support is a profile and not a `claude_memory` adapter.
+# Hermes stores the same *kinds* of artifact in structurally different places:
+# memory is two monolithic files instead of one-file-per-fact, and sessions are
+# rows in SQLite instead of files on disk. An abstraction shaped around Claude's
+# layout would have had to be rewritten on contact with this one.
+
+name = "hermes"
+
+[memory]
+layout = "few_files_many_facts"   # not one fact per file — needs segmentation
+root = "~/.hermes/memories"
+files = ["MEMORY.md", "USER.md"]
+extra = ["~/.hermes/SOUL.md"]
+frontmatter = "none"
+links = "none"
+scoping = "global"
+# Global scope is the important part: these facts are about the user and the
+# assistant, not about any one project, so they do not belong to a project
+# corpus like `guru`. They are the natural contents of a separate `self` corpus.
+# A corpus that swept them in would answer project questions with user facts.
+
+[sessions]
+layout = "sqlite"
+db = "~/.hermes/state.db"
+session_table = "sessions"        # id, started_at, cwd, git_branch, git_repo_root, title
+message_table = "messages"        # session_id, role, content, timestamp, tool_*
+scoping = "column"
+scope_column = "git_repo_root"    # sessions ARE project-scopeable even though memory is not
+# 1223 sessions / 19890 messages as of 2026-08-08. No path identity per unit —
+# the hardest available test of the adapter contract (PLAN §5), since every
+# Phase 0 adapter reads a file tree.

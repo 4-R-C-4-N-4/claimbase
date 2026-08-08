@@ -138,7 +138,36 @@ has two commits 20 minutes apart, `9f2a7995 16:05` then `be523169 16:25 "flip to
 rename)"`. Grep over the working tree can only say "no stale record survives." Git says the stale
 window was twenty minutes wide and names the commit that closed it.
 
-### 0.46 — Source E: curated memory (outside every repo)
+### 0.46 — Source E: harness artifacts (outside every repo)
+
+**Harness-neutral by construction, because the second harness is already here.**
+Agent harnesses keep durable memory and session transcripts outside the repos they work on.
+Claude is the only one used on guru work today, but `~/.hermes` exists on this machine and stores
+the same *kinds* of artifact in structurally different places:
+
+| | claude | hermes |
+|---|---|---|
+| memory layout | one fact per file, YAML frontmatter, `[[wikilinks]]` | two monolithic files, many facts each |
+| memory scope | per-project (cwd-derived key) | **global** — not project-scopeable |
+| sessions | JSONL files on disk | rows in SQLite (1223 sessions / 19890 messages) |
+| session scope | directory key | `git_repo_root` column |
+
+So "harness memory is a directory of markdown" is false, and an adapter shaped around Claude
+would have been rewritten on contact with hermes. Instead: `harnesses/<name>.toml` declares
+layout and scoping; a corpus source names `harness` + `scope`; one adapter reads the profile.
+Adding codex is a profile plus at most one format reader — never a core change. This also forces
+a source declaration to carry a **selector**, not just a path, since a scope can be a directory
+key, a database column, or nothing at all.
+
+Hermes memory is *global* — facts about the user and the assistant, not about guru — so it is
+deliberately **not** a source of corpus `guru`; it belongs to a separate `self` corpus. That
+distinction only became expressible once corpora were named, and it is the first real payoff of
+naming them.
+
+Hermes sessions are the hardest available test of the adapter contract (§5): units with **no
+path identity at all**, produced by a SQL query rather than a file walk. Phase 1 candidate.
+
+#### What Claude's memory contributes today
 
 41 hand-written memory files, ~95 KB, under `~/.claude/projects/-home-ivy-Work-{guru,guru-web,
 rellm}/memory/` — 16 + 16 + 9. Dated, atomic, and already claim-shaped: *"Tagging stays v1;
@@ -387,13 +416,19 @@ no file-shaped unit, no LLM.
 - Merge commits and mechanical subjects are dropped, and the drop count is reported — a silent
   filter here would quietly hide a third of the source.
 
-### P0.4c — Adapter E: `sources/claude_memory.py`
+### P0.4c — Adapter E: `sources/agent_memory.py`
 
-- Unit = one memory file. Frontmatter (`name`, `description`, `metadata.type`) → structured
-  claims with no LLM; body prose → extraction; `[[wikilinks]]` → edges, and the only genuine
-  wiki-link entity seed in this corpus (§0.1's missing input, at small scale).
-- Trust tier `agent_authored_human_gated`, read from the corpus definition (§0.46).
-- `MEMORY.md` is an index, not content — skipped, and the skip is reported.
+Harness-neutral; reads `harnesses/<name>.toml` for layout (§0.46). Phase 0 exercises the
+`claude` profile only, but the `hermes` profile ships alongside it so the profile mechanism has
+two implementations from the start rather than one and a promise.
+
+- Unit = one durable fact. Under `file_per_fact` that is a file; under `few_files_many_facts` it
+  is a segment — the profile decides, the adapter does not assume.
+- Frontmatter (`name`, `description`, `metadata.type`) → structured claims with no LLM; body
+  prose → extraction; `[[wikilinks]]` → edges, and the only genuine wiki-link entity seed in this
+  corpus (§0.1's missing input, at small scale).
+- Trust tier `agent_authored_human_gated`, read from the corpus definition, never inferred.
+- The index file named by the profile (`MEMORY.md`) is an index, not content — skipped, reported.
 
 *Exit for P0.2–4c:* `claimbase import guru` is idempotent, the conformance suite passes for all
 five adapters, per-source claim / entity / edge counts are reported, and **the git log shows no

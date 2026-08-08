@@ -35,28 +35,43 @@ path = "~/Work/rellm"
 # discovering it and silently contributing nothing.
 adapters = ["markdown_docs", "git_log", "run_artifacts"]
 
-# --- curated memory ----------------------------------------------------------
+# --- harness artifacts -------------------------------------------------------
 # Hand-written, dated, already claim-shaped, and outside every repo above — so no
 # repo adapter reaches it. Authored by an agent and approved by the user, which is
 # neither of the two trust tiers the ticket store supplies; see PLAN.md §2.2.
+#
+# `harness` + `scope` rather than a raw path: which harness produced these is a
+# parsing question answered by harnesses/<name>.toml, and `scope` selects this
+# corpus's slice of it. Claude scopes memory by directory key; another harness
+# may scope by a database column, or not be scopeable at all. Only Claude is on
+# this machine's guru work today — the shape is what keeps codex or hermes from
+# being a rewrite.
 
 [[source]]
 name = "guru-memory"
-kind = "claude_memory"
-path = "~/.claude/projects/-home-ivy-Work-guru/memory"
-adapters = ["claude_memory"]
+kind = "agent_memory"
+harness = "claude"
+scope = "-home-ivy-Work-guru"
+adapters = ["agent_memory"]
 trust = "agent_authored_human_gated"
 
 [[source]]
 name = "guru-web-memory"
-kind = "claude_memory"
-path = "~/.claude/projects/-home-ivy-Work-guru-web/memory"
-adapters = ["claude_memory"]
+kind = "agent_memory"
+harness = "claude"
+scope = "-home-ivy-Work-guru-web"
+adapters = ["agent_memory"]
 trust = "agent_authored_human_gated"
 
 [[source]]
 name = "rellm-memory"
-kind = "claude_memory"
-path = "~/.claude/projects/-home-ivy-Work-rellm/memory"
-adapters = ["claude_memory"]
+kind = "agent_memory"
+harness = "claude"
+scope = "-home-ivy-Work-rellm"
+adapters = ["agent_memory"]
 trust = "agent_authored_human_gated"
+
+# Deliberately absent: hermes memory (~/.hermes/memories) is globally scoped —
+# facts about the user and the assistant, not about guru. It belongs to a `self`
+# corpus, not this one. Hermes *sessions* are scopeable by git_repo_root and are
+# a Phase 1 candidate here.
