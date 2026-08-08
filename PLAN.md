@@ -138,6 +138,26 @@ has two commits 20 minutes apart, `9f2a7995 16:05` then `be523169 16:25 "flip to
 rename)"`. Grep over the working tree can only say "no stale record survives." Git says the stale
 window was twenty minutes wide and names the commit that closed it.
 
+### 0.455 — Source F: pull request descriptions
+
+174 PRs across guru (52) and guru-web (122), **~329 KB of description prose**,
+2026-04-27 → present. 167 merged. rellm has none — no PR flow there.
+
+Found by asking the user to mark elicitation rows and being told: *"their PRs likely have
+the most relevant info, I would just be checking those."* That is a derivable answer, not
+an unknown, so it belongs in the corpus rather than in a human's afternoon.
+
+A PR description is an **outcome summary written at merge time** — the same claim density
+as a ticket resolution note, with a merge date attached and a diff behind it. Volume is
+comparable to the whole ticket corpus (475 KB) and to commit messages (503 KB), and it
+overlaps neither: PRs summarise *why a batch of work happened*, which commits state too
+tersely and tickets state before the fact.
+
+Unit = one PR. `source_ref` = `<repo>#<number>`; `captured_at` = `mergedAt` (an unmerged PR
+is a proposal, not a record of work done); entity mentions = changed paths and any `todo:`
+ids in the branch name, which link it to Adapter A. Zero review comments in these repos —
+solo development — so the discussion layer other corpora would have is simply absent here.
+
 ### 0.46 — Source E: harness artifacts (outside every repo)
 
 **Harness-neutral by construction, because the second harness is already here.**

@@ -24,18 +24,18 @@ yet tag/edge review is *current* — it migrated to the guru-review web app's HT
 |---|---|---|---|---|
 | ☐ | `scripts/review_tags.py` | guru | 72d | 13 records — `11-tag-review.md`, `document-knowledge-data-structures.md`, `guru-web-alignment.md` +10 |
 | ☐ | `scripts/review_edges.py` | guru | 72d | 10 records — `14-edge-review.md`, `guru-web-alignment.md`, `design.md` +7 |
-| ☐ | `scripts/sync_taxonomy.py` | guru | 72d | 4 records — `09-graph-bootstrap.md`, `guru-web-alignment.md`, `design.md` +1 |
-| ☐ | `scripts/run-qwen.sh` | guru | 110d | 2 records — `10-tag-concepts.md`, `13-propose-edges.md` |
+| ☐ | `scripts/sync_taxonomy.py` | guru | 61d | 4 records — `09-graph-bootstrap.md`, `guru-web-alignment.md`, `design.md` +1 |
 | ☐ | `scripts/cleanup_dupes.sh` | guru | 104d | 2 records — `design.md`, `design.md` |
-| ☐ | `scripts/auto_promote.sh` | guru | 101d | 2 records — `url-vetting.md`, `design.md` |
-| ☐ | `scripts/auto_promote_edges.sh` | guru | 101d | 2 records — `url-vetting.md`, `design.md` |
-| ☐ | `scripts/cleanup_stale_embeddings.py` | guru | 97d | 2 records — `09-graph-bootstrap.md`, `12-embed.md` |
+| ☐ | `scripts/auto_promote.sh` | guru | 102d | 2 records — `url-vetting.md`, `design.md` |
+| ☐ | `scripts/auto_promote_edges.sh` | guru | 102d | 2 records — `url-vetting.md`, `design.md` |
+| ☐ | `scripts/cleanup_stale_embeddings.py` | guru | 83d | 2 records — `09-graph-bootstrap.md`, `12-embed.md` |
 | ☐ | `scripts/merge_adapter.py` | rellm | 82d | 2 records — `v2-vs-v3-comparison.md`, `README.md` |
 | ☐ | `scripts/to_gguf.sh` | rellm | 82d | 2 records — `v2-vs-v3-comparison.md`, `README.md` |
+| ☐ | `scripts/run-qwen.sh` | guru | 74d | 2 records — `10-tag-concepts.md`, `13-propose-edges.md` |
 | ☐ | `scripts/cleanup_chunk_ids.sh` | guru | 101d | 1 records — `06-chunk.md` |
 | ☐ | `scripts/bench_v1_sanity.sh` | rellm | 77d | 1 records — `v1-vs-v2-comparison.md` |
 | ☐ | `scripts/bench_v2_serial.sh` | rellm | 77d | 1 records — `v1-vs-v2-comparison.md` |
-| ☐ | `scripts/retag_sample_debug.py` | guru | 76d | 1 records — `80-concept-teacher-run-retro.md` |
+| ☐ | `scripts/retag_sample_debug.py` | guru | 74d | 1 records — `80-concept-teacher-run-retro.md` |
 | ☐ | `scripts/bench_gauge.sh` | rellm | 74d | 1 records — `v2-vs-v3-comparison.md` |
 | ☐ | `scripts/bench_v3_add.sh` | rellm | 74d | 1 records — `v2-vs-v3-comparison.md` |
 | ☐ | `scripts/cleanup_stale_chunk_nodes.py` | guru | 72d | 1 records — `09-graph-bootstrap.md` |
@@ -48,5 +48,5 @@ yet tag/edge review is *current* — it migrated to the guru-review web app's HT
 practice demonstrably ended 2026-07-14. If they do not appear high in this list,
 the ranking is wrong and the rest of the list should not be trusted.
 
-- `scripts/auto_promote.sh` — rank 6 of 19, 101d quiet ✅
-- `scripts/auto_promote_edges.sh` — rank 7 of 19, 101d quiet ✅
+- `scripts/auto_promote.sh` — rank 5 of 19, 102d quiet ✅
+- `scripts/auto_promote_edges.sh` — rank 6 of 19, 102d quiet ✅

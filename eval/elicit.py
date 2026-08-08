@@ -120,6 +120,20 @@ def main() -> None:
             if tok in anc:
                 note_exercise(tok, ts)
 
+    # Merged PRs are the strongest evidence of exercise available: a description
+    # written at merge time, reporting what was actually done. Without them the
+    # sweep mistook "no commit touched this file" for "nobody ran this."
+    from prs import load_all_prs, text_of
+
+    for pr in load_all_prs():
+        if not pr.get("mergedAt"):
+            continue  # an unmerged PR is a proposal, not evidence of work done
+        ts = datetime.fromisoformat(pr["mergedAt"].replace("Z", "+00:00"))
+        body = text_of(pr)
+        for name in anc:
+            if name in body:
+                note_exercise(name, ts)
+
     rows = []
     for name, meta in anc.items():
         a = asserts.get(name, [])

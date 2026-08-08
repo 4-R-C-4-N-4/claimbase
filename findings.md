@@ -113,3 +113,21 @@ more strongly than expected. A launcher that works needs no commits, ever.
 Drop days-quiet as a ranking term. The two rules worth keeping are the ones that fired
 correctly above: *structural change precedes the claim, never reasserted after* and
 *input changed after its consumer last ran*. Both are event comparisons, not timers.
+
+### PRs help, but the sweep has a hard floor
+
+Adding merged-PR descriptions as evidence of exercise moved several rows
+(`run-qwen.sh` 110d → 74d, `sync_taxonomy.py` 72d → 61d, `cleanup_stale_embeddings.py`
+97d → 83d) and removed none — 19 candidates before and after.
+
+`run-qwen.sh` is still flagged and is still a confirmed **A**, which exposes the floor:
+**practices that leave no artifact cannot be swept.** Launching a model server produces
+no commit, no PR, no ticket — it is simply run. Same for reviewing through a web UI over
+Tailscale, or reading a dashboard. These are exercised constantly and recorded nowhere,
+so artifact-silence and abandonment are only weakly correlated for them.
+
+This bounds design §6's stale sweep honestly: it can flag *candidates*, and the two event
+rules make it much sharper than a timer, but for artifact-invisible practice the only
+signal is asking. Which is an argument for the capture path (§5 `assert()`) rather than
+for a better sweep — the sweep cannot see what was never written, and the fix is to make
+writing cheap, not to infer harder.
