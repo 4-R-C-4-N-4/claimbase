@@ -1,0 +1,24 @@
+# pgvector/pgvector:pg17 for parity with guru's own database, on 5433 so both can
+# be up at once. The local PostgreSQL 18.3 on this machine has no pgvector, and
+# fighting that is not where the novelty budget goes.
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: claimbase-db
+    environment:
+      POSTGRES_USER: claimbase
+      POSTGRES_PASSWORD: claimbase
+      POSTGRES_DB: claimbase
+    ports:
+      - "5433:5432"
+    volumes:
+      - claimbase-pgdata:/var/lib/postgresql/data
+      - ./migrations:/migrations:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U claimbase"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  claimbase-pgdata:
