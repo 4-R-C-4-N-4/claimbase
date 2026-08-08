@@ -546,7 +546,10 @@ evidence, and it is free to collect.
 
 - Prompt + strict JSON schema per §4.2; `meta.extractor_version` on every claim so a model bump
   can selectively reprocess.
-- Teacher A: local 27B via the existing `llm` swap, **no-think** (6× faster on mechanical tasks).
+- Teacher A: local 27B **launched with `guru/scripts/run-qwen.sh`** (→ `serve-llama.sh` with
+  `Qwen3.5-27B-UD-Q4_K_XL.gguf`), **no-think** (6× faster on mechanical tasks). Confirmed by the
+  user 2026-08-08 as the current path for running the 27B tagger — use it rather than the `llm`
+  swap or a hand-rolled launcher.
   Teacher B: frontier API, over the gold set only. Pick on measured F1, not vibes — this also
   finally measures 27B no-think vs. think on a structured-output task.
 - **Free second scoreboard:** run the extractor over ticket prose whose record already declares a

@@ -93,3 +93,23 @@ Here the rule fires correctly in the *opposite* direction: sync_taxonomy postdat
 hierarchy, so the suspicion is discharged — and the actual defect (never run since a
 dependency changed) is a different rule: **an input changed after its consumer last
 ran.** `taxonomy.toml` edited 2026-08-01, `sync_taxonomy.py` last exercised 2026-05-26.
+
+### Ranking calibration: days-quiet is the wrong signal
+
+Four verdicts in, from the user:
+
+| rank | item | gap | asserts | verdict |
+|---|---|---|---|---|
+| 1 | `review_tags.py` | 72d | 13 | **B** — unused; web tool over Tailscale |
+| 2 | `review_edges.py` | 72d | 10 | **B** — same |
+| 3 | `sync_taxonomy.py` | 72d | 4 | **A** — right tool, just overdue a run |
+| 4 | `run-qwen.sh` | 110d | 2 | **A** — still SOTA for the 27B tagger |
+
+Precision 2/4, and **both false positives carry the longest gaps** — `run-qwen.sh` has the
+largest gap on the entire list and is a confident A. Assertion count carried the true
+positives; the gap term contributed noise, exactly as the header caveat predicted but
+more strongly than expected. A launcher that works needs no commits, ever.
+
+Drop days-quiet as a ranking term. The two rules worth keeping are the ones that fired
+correctly above: *structural change precedes the claim, never reasserted after* and
+*input changed after its consumer last ran*. Both are event comparisons, not timers.
