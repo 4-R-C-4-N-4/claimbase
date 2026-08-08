@@ -247,7 +247,31 @@ Then the user supplied one the harvester could never find:
 The corpus asserts the opposite in 8+ places (`docs/autopromote/design.md`,
 `docs/ingest/13-propose-edges.md` — written the night before —, `docs/web-review/edges.md`,
 `scripts/auto_promote_edges.sh`), and guru's curated memory records it as a *standing workflow*
-with detailed rationale. **No retraction exists anywhere.** No doc, no ticket, no commit message.
+with detailed rationale.
+
+**Corrected, same day:** a retraction *does* exist — in a scope the stale record's readers never
+see. Checking timestamps turned this from an absence into a three-point supersession chain:
+
+| asserted | where | claim |
+|---|---|---|
+| 2026-06-11 | memory scope `…-Work-guru` | auto-promote the 0.90+ tiers; never queue verdicts there |
+| 2026-07-14 | memory scope `…-Work` | never run auto_promote **at any tier**; queue-only, user keeps the apply gate |
+| 2026-08-08 | this conversation | automated review with Fable/Opus beats auto-promote outright |
+
+Each supersedes the last, the order is unambiguous from transaction time alone, and **all three
+are still live**. The June record is the newest file in a memory scope frozen since that date,
+while its subject stayed active — so a session opened in `~/Work/guru` reads the superseded
+version and gets no signal that a correction exists one directory over.
+
+This is the design's core case arriving unprompted: same subject, three dated assertions,
+transaction time decides, older ones marked superseded rather than deleted. It is also the
+concrete harm behind the user's instruction that knowledge must be independent of directory —
+scope-keyed memory fragments a knowledge base so that contradictions cannot meet. A single named
+corpus with bitemporal claims resolves it by construction; two directories cannot.
+
+The weaker form of the original finding still holds for the *repo* corpus: 8+ docs and scripts
+assert auto-promote as current and none of them carries the correction. But the sharper lesson is
+that fragmentation, not absence, is what kept the correction from being found.
 
 This inverts the plan's model of staleness. Doc-versus-doc contradiction is the *easy* case and
 this corpus mostly self-heals it. The dangerous case is **abandoned practice that was never
