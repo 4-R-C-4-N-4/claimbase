@@ -57,7 +57,9 @@ and double as ground truth for scoring prose extraction.
 
 ### 0.3 — Source B: the `docs/` trees (prose-rich, design-rich, argument-rich)
 
-~108 markdown docs (34 guru + 32 guru-web + 42 rellm), ~1.75 MB, April→August window.
+80 markdown docs (35 guru + 33 guru-web + 12 rellm — `docs/**` plus repo-root files), 1.16 MB,
+April→August window. *(An earlier count of 42 rellm docs was wrong: it swept vendored files under
+`unsloth_compiled_cache/`. Verified by `eval/corpus.py`.)*
 Architecture docs, BRDs, IMPL plans, audits, tuning experiments, retros, autopsies. This is the
 "irreducibly prose" material of Risk §10.2 and the natural home of the *conceptual* vocabulary —
 chunks, concepts, traditions, staged tags, dossiers, corpus sync — which the ticket corpus
@@ -78,9 +80,13 @@ Three properties earn it a Phase 0 slot beyond corpus breadth:
 
 ### 0.4 — Source C: rellm benchmark run artifacts (measurement-rich)
 
-`rellm/runs/bench/<name>-<ISO-timestamp>/`, 20 dated run directories, 2026-05-13 → 2026-08-07.
-Each holds `report.txt` (per-model precision / recall / F1 / MAE / macro-F1 tables), plus
-`cells.csv`, `runs.csv`, and per-model subdirs.
+`rellm/runs/bench/<name>-<ISO-timestamp>/`, 16 run directories, 2026-05-13 → 2026-08-07, of which
+**8 carry a `report.txt`** (per-model precision / recall / F1 / MAE / macro-F1 tables). The other
+8 hold only `cells.csv` / `runs.csv` — metrics recoverable by aggregation, deliberately deferred;
+Phase 0 reads `report.txt` and nothing else. Two directories (`grammar-test`, `smoke-human`) have
+no parseable timestamp in the name at all, which is a useful forcing function: the adapter must
+handle a **null** `captured_at` rather than inventing one (design §4.4 — a guessed valid-time is
+a lie with a timestamp).
 
 This is the third source *shape*, and the one that matters most for §2: its unit is a directory
 not a file, its timestamp comes from the **path**, not git (rellm has only 20 commits total), and
@@ -151,13 +157,28 @@ changed during the April→August window. Chunk-RAG answers these confidently an
 contradictions, (c) design-doc lineages (`v2`→`v3`, `proposal`→`findings`), (d) metrics restated
 across bench runs, (e) beliefs a later doc explicitly retracts.
 
-Three known-good seeds, already verified to exist in the corpus:
+Candidates are harvested by `eval/harvest.py` into `eval/candidates.md` — a review queue, not a
+gold set; each needs a human to accept, cut, or rewrite it.
 
-| Question | Naive answer | Correct answer |
-|---|---|---|
-| Does the base model beat the fine-tunes? | Yes — June bench report | No; that reading is a measurement artifact (autopsy, 2026-08-05); v1 is best of three |
-| Should homology scoring be wired into guru? | Yes — `homology/proposal.md` | No; method gate not passed (`findings.md`, 2026-08-05) |
-| How does the review app store staged tag targets? | `staged_tag_id` — docs | `target_id`; renamed April 2026 |
+**Corrected 2026-08-07.** An earlier draft of this section listed three seeds as "verified to
+exist." Running the harvester falsified two of them. Recorded here because the *way* they failed
+is a standing lesson about this corpus:
+
+| Claimed seed | Verdict |
+|---|---|
+| *How does the review app store staged tag targets?* (`staged_tag_id` → `target_id`) | **Dead.** Only 3 files mention `staged_tag_id` and all 3 also mention `target_id` — the docs were revised alongside the rename. No stale record survives, so chunk-RAG answers it correctly. Staleness was inferred from the rename ticket existing, which is not the same thing. |
+| *Does the base model beat the fine-tunes?* | **Alive, but not where claimed.** The June `report.txt` shows base F1 0.389 vs v1 **0.488** — base loses there too. The retracted claim lives in the **human-graded** table (`report_human.txt`, base 0.594 > v1 0.537 > v3 0.589), restated in `qwen-3-4b-guru-card.md` (May 27) and disowned as a "shotgun over-emission artifact" by the autopsy (Aug 5). |
+| *Should homology scoring be wired into guru?* | **Alive.** `proposal.md` argues the bet; `findings.md` (2026-08-05) records the gate not passing. |
+
+Two general lessons, both now encoded in the harvester:
+
+1. **A rename is not a stale answer.** Supersession only produces a bad retrieval when something
+   stale *survives*. A well-maintained corpus self-corrects, and this one often does. S1 therefore
+   requires a surviving record that mentions the old name and not the new one.
+2. **Ground truth has variants.** `report.txt` (teacher-labelled) and `report_human.txt`
+   (human-graded) disagree about which model wins, and the disagreement is the whole point. They
+   are loaded as separate records with the variant in the metric name; collapsing them would have
+   erased the corpus's single best stale-answer pair.
 
 ---
 
