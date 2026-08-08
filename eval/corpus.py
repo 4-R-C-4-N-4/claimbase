@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 CORPORA = Path(__file__).resolve().parent.parent / "corpora"
+HARNESSES = Path(__file__).resolve().parent.parent / "harnesses"
 
 
 def load_corpus_def(name: str = "guru") -> dict:
@@ -29,8 +30,27 @@ def load_corpus_def(name: str = "guru") -> dict:
     with (CORPORA / f"{name}.toml").open("rb") as fh:
         spec = tomllib.load(fh)
     for s in spec["source"]:
-        s["resolved"] = Path(s["path"]).expanduser()
+        # Not every source is a path. Harness-backed sources declare `harness` +
+        # `scope` and are located via harnesses/<name>.toml, because a scope can
+        # be a directory key, a database column, or nothing at all.
+        if "path" in s:
+            s["resolved"] = Path(s["path"]).expanduser()
+        elif "harness" in s:
+            s["resolved"] = resolve_harness_path(s)
     return spec
+
+
+def load_harness_profile(name: str) -> dict:
+    with (HARNESSES / f"{name}.toml").open("rb") as fh:
+        return tomllib.load(fh)
+
+
+def resolve_harness_path(source: dict) -> Path | None:
+    """Where this corpus's slice of a harness's memory lives, if it is a path at all."""
+    prof = load_harness_profile(source["harness"])["memory"]
+    if prof.get("scoping") != "path":
+        return None  # e.g. sqlite-backed or globally-scoped: not addressable as a path
+    return Path(prof["root"].replace("{scope}", source.get("scope", ""))).expanduser()
 
 
 CORPUS = load_corpus_def()
