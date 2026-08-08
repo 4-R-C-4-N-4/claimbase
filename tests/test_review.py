@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from claimbase.review.queue import Decision, DecisionLog, Item, split_sentences, to_gold_jsonl
+from claimbase.review.queue import (
+    Decision,
+    DecisionLog,
+    Item,
+    split_sentences,
+    to_gold_jsonl,
+)
 
 
 def test_decisions_are_appended_never_edited(tmp_path: Path) -> None:
@@ -48,12 +54,39 @@ def test_export_only_includes_graded(tmp_path: Path) -> None:
     assert "e2" not in out.read_text()
 
 
-def test_sentence_split_keeps_bullets_separate() -> None:
-    text = "A claim about X. Another about Y.\n\n- a bullet item here\n- second bullet item"
-    parts = split_sentences(text)
-    assert len(parts) >= 3
-    assert any("bullet item here" in p for p in parts)
-
-
 def test_sentence_split_drops_fragments() -> None:
-    assert split_sentences("ok. no. yes.") == []  # nothing over 15 chars survives
+    """Superseded an earlier test that asserted 4-word fragments survive. They no
+    longer do, and that is the fix rather than a regression: a fragment costs the
+    grader a decision they cannot make."""
+    assert split_sentences("ok. no. yes.") == []
+
+
+def test_code_tables_and_headings_never_reach_the_grader() -> None:
+    """The first version of this queue asked people to classify code fences and
+    table rows. A question with no answer is worse than no question."""
+    text = (
+        "## A heading\n\n"
+        "```python\nx = compute(y)\n```\n\n"
+        "| col | col |\n|---|---|\n\n"
+        "The teacher does not separate reasoning into that field, so the parser accepts it.\n"
+    )
+    got = split_sentences(text)
+    assert got == ["The teacher does not separate reasoning into that field, so the parser accepts it."]
+
+
+def test_frontmatter_is_stripped() -> None:
+    text = (
+        "---\nname: a-thing\ndescription: Main is protected\nmetadata:\n  type: feedback\n---\n\n"
+        "All work happens on the ticket branch and ships through a pull request.\n"
+    )
+    assert not any("description:" in s for s in split_sentences(text))
+
+
+def test_bullets_stay_separate_and_fragments_drop() -> None:
+    text = "- short\n- The tier split no longer describes the workflow, since every tier is reviewed.\n"
+    got = split_sentences(text)
+    assert len(got) == 1 and got[0].startswith("The tier split")
+
+
+def test_truncated_sentence_is_rejected() -> None:
+    assert split_sentences("This one runs off the end of the extract and never") == []
