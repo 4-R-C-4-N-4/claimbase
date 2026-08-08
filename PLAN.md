@@ -295,6 +295,43 @@ Same pattern, second instance: the user notes the rellm v2 regression was also d
 assumptions about the corpus and a VRAM-restricted training set — a factor the autopsy, which
 concludes "not a training problem," does not cover. That correction is also nowhere in the corpus.
 
+### 0.9 — Capability vs. practice (proposed amendment to DESIGN §4.5)
+
+The auto-promote case exposes a distinction the claim model does not currently draw. Two claims
+live in one memory file:
+
+- **capability** — *"`auto_promote_edges.py` inserts to live `edges` as `tier='proposed'` and
+  deliberately leaves `staged_edges.status='pending'`."* Still true. The tool works, has a reason
+  to exist, and the explanation is still worth having.
+- **practice** — *"the workflow uses auto-promote for the 0.90+ tiers."* Ended 2026-07-14.
+
+The user's framing: *"the autopromote itself would be a useful tool… it's just that in practice I
+don't use it right now, I might in the future."* That is not a falsified claim. Nothing was
+discovered to be wrong — a capability moved off the call path. It is the same shape as code that
+compiles, passes its tests, and is currently called from nowhere: deleting it loses capability,
+leaving it undocumented misleads, and the honest annotation is about the *call path*, not the
+function.
+
+**Two rules follow.**
+
+1. **Extraction must split bundled prose.** A single paragraph asserting both a capability and a
+   practice yields two claims with different lifetimes. Emitting one claim for the paragraph is
+   what makes a correct capability note die alongside a retired workflow.
+2. **Superseding a practice claim must not cascade to the capability claims it references.**
+   Retiring auto-promote from the workflow does not make `auto_promote_edges.py` stop inserting
+   `tier='proposed'` rows. A cascade here would mark true statements superseded, which is worse
+   than leaving them unmarked — it manufactures confident wrongness in the opposite direction.
+
+**Dormancy needs no new status.** Bitemporality already handles it: the practice claim gets
+`valid_to = 2026-07-14` and stays. If the practice resumes, that is a *new* claim with a new
+`valid_from`, not an un-supersession — and `timeline(subject)` renders the gap, which is the
+honest picture. "Superseded and kept" is the whole mechanism; a `dormant` status would only
+duplicate what the validity interval already says.
+
+This is why supersession must never be deletion. The June memory file is not garbage to be
+overwritten: it is the correct answer to *"how did edge promotion work in June?"*, and that is a
+legal query.
+
 ## 1. Phase 0 objective, restated as a falsifiable test
 
 Phase 0 passes only if, on a held-out question set over the guru corpus:
