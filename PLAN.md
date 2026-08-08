@@ -93,9 +93,12 @@ Three properties earn it a Phase 0 slot beyond corpus breadth:
 **8 carry a `report.txt`** (per-model precision / recall / F1 / MAE / macro-F1 tables). The other
 8 hold only `cells.csv` / `runs.csv` — metrics recoverable by aggregation, deliberately deferred;
 Phase 0 reads `report.txt` and nothing else. Two directories (`grammar-test`, `smoke-human`) have
-no parseable timestamp in the name at all, which is a useful forcing function: the adapter must
-handle a **null** `captured_at` rather than inventing one (design §4.4 — a guessed valid-time is
-a lie with a timestamp).
+no parseable timestamp in the name at all. *(Corrected 2026-08-08 while building the adapter:
+these were claimed here as a forcing function for null `captured_at`, and they are not — neither
+carries a report, so both are skipped before the dating path is reached. The contract is still
+nullable, correctly, but this corpus does not exercise it; only a synthetic test does. Worth
+knowing that a design property justified by a real example turned out to rest on one that
+does not apply.)*
 
 This is the third source *shape*, and the one that matters most for §2: its unit is a directory
 not a file, its timestamp comes from the **path**, not git (rellm has only 20 commits total), and
