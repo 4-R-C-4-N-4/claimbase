@@ -236,3 +236,62 @@ and which decides whether *"should homology ship?"* is answered correctly.
 That gap is ~15–20 passages of rellm research prose, not 450 sentences across 49
 screens. The review tool itself stays — it is Phase 2's conflict queue, which is real
 work — but `gold_extract` as sampled is scrapped.
+
+---
+
+## 2026-08-08 — Teacher bake-off: the extractor works, the scoreboard does not
+
+GPU authorised. 27B launched via `run-qwen.sh` (thinking) and then `llm qwen3.5`
+with `--chat-template-kwargs {"enable_thinking":false}` for no-think, per the memory
+note — helper scripts untouched.
+
+### Mode timing, finally measured on a structured-output task
+
+| mode | secs/passage |
+|---|---|
+| thinking | 189 |
+| no-think (v1 prompt) | 16.4 |
+| no-think (v2 prompt) | 6.9 |
+
+~11-27x, wider than the 6x measured on tagging. Quality between modes is still
+unmeasured — the run below is no-think only, and that limitation stands.
+
+### Prompt v1 -> v2
+
+v1 produced 13.25 claims/passage with **85% labelled `fact`**, including 14 facts
+from a passage the user had marked `hypothesis` — Risk §10.1 exactly. v2 narrowed
+`fact` and capped extraction at 5: claims/passage fell to 4.34 and latency to 6.9s.
+
+But the kind collapse only **moved**: everything became `observation`, the new
+stated default. The 27B is anchoring on whatever the prompt names as default rather
+than discriminating. That is worth knowing before any fine-tune is designed around
+kind labels.
+
+### The free scoreboard does not work, and the mapping was mine
+
+Scored 38 stratified labelled passages: contains 0.658, dominant 0.289, with
+`decision` the worst at 0.333. Reading the disagreements showed **the model was
+right and the mapping was wrong**. Two passages labelled `decision` by my mapping:
+
+> "All 4 subtasks complete: snapshot documentLayer + dossierCapsules... Essay
+> generation pending a valid OpenRouter key."
+> "Added BlogHomeButton client component ... renders it as persistent chrome on both
+> blog index and post routes."
+
+Those are reports of work done — observations. `resolution -> decision` was my
+invention: a resolution *closes* a ticket, but a resolution *note* is a work report.
+
+Correcting it makes the metric useless in the other direction: ~85% of the labelled
+population becomes `observation`, which is also the extractor's default, so
+agreement would be high and measure nothing. And `hypothesis` — the distinction that
+decides whether "should homology ship?" is answered correctly — has **one** labelled
+example in the entire corpus.
+
+**So the free second scoreboard, which PLAN §P0.5 promised and which I argued for
+again one turn earlier as the reason to scrap hand-grading, cannot measure kind
+classification on this corpus.** The ticket vocabulary and the claim-kind vocabulary
+are not the same ontology, and assuming they were was a third instance of building a
+measurement without checking what it measures.
+
+What survives: extraction is mechanically sound — 0 errors, 0 parse failures, 4.3
+claims/passage, ~7s each. Kind accuracy is unmeasured, and honestly so.

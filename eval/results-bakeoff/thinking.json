@@ -1,0 +1,71 @@
+{
+  "summary": {
+    "mode": "thinking",
+    "n": 2,
+    "errors": 0,
+    "parse_failures": 0,
+    "contains_rate": 0.5,
+    "dominant_rate": 0.0,
+    "avg_claims": 10.0,
+    "avg_secs": 189.0,
+    "total_min": 6.3,
+    "by_gold": {
+      "hypothesis": {
+        "n": 1,
+        "contains": 0.0
+      },
+      "observation": {
+        "n": 1,
+        "contains": 1.0
+      }
+    }
+  },
+  "rows": [
+    {
+      "ticket": "d7885c88",
+      "label": "evidence",
+      "gold": "observation",
+      "n_claims": 14,
+      "kinds": [
+        "fact",
+        "fact",
+        "fact",
+        "fact",
+        "fact",
+        "fact",
+        "fact",
+        "fact",
+        "fact",
+        "fact",
+        "fact",
+        "fact",
+        "observation",
+        "fact"
+      ],
+      "contains": true,
+      "dominant": false,
+      "secs": 221.4,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "50438e23",
+      "label": "hypothesis",
+      "gold": "hypothesis",
+      "n_claims": 6,
+      "kinds": [
+        "fact",
+        "fact",
+        "fact",
+        "fact",
+        "fact",
+        "fact"
+      ],
+      "contains": false,
+      "dominant": false,
+      "secs": 156.6,
+      "error": null,
+      "empty_raw": false
+    }
+  ]
+}

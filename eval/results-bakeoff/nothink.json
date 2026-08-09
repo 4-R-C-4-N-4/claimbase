@@ -1,0 +1,692 @@
+{
+  "summary": {
+    "mode": "nothink",
+    "n": 38,
+    "errors": 0,
+    "parse_failures": 0,
+    "contains_rate": 0.658,
+    "dominant_rate": 0.289,
+    "avg_claims": 4.34,
+    "avg_secs": 6.9,
+    "total_min": 4.4,
+    "by_gold": {
+      "decision": {
+        "n": 12,
+        "contains": 0.333
+      },
+      "fact": {
+        "n": 12,
+        "contains": 0.667
+      },
+      "hypothesis": {
+        "n": 1,
+        "contains": 0.0
+      },
+      "observation": {
+        "n": 13,
+        "contains": 1.0
+      }
+    }
+  },
+  "rows": [
+    {
+      "ticket": "885b6e90",
+      "label": "resolution",
+      "gold": "decision",
+      "n_claims": 4,
+      "kinds": [
+        "observation",
+        "observation",
+        "observation",
+        "observation"
+      ],
+      "contains": false,
+      "dominant": false,
+      "secs": 4.2,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "50438e23",
+      "label": "evidence",
+      "gold": "observation",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "observation",
+        "observation",
+        "fact",
+        "decision"
+      ],
+      "contains": true,
+      "dominant": true,
+      "secs": 10.6,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "3eb7c659",
+      "label": "resolution",
+      "gold": "decision",
+      "n_claims": 2,
+      "kinds": [
+        "observation",
+        "observation"
+      ],
+      "contains": false,
+      "dominant": false,
+      "secs": 3.5,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "709e9d02",
+      "label": "conclusion",
+      "gold": "fact",
+      "n_claims": 4,
+      "kinds": [
+        "decision",
+        "practice",
+        "fact",
+        "practice"
+      ],
+      "contains": true,
+      "dominant": false,
+      "secs": 7.8,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "11e80be4",
+      "label": "evidence",
+      "gold": "observation",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "observation",
+        "observation",
+        "observation",
+        "fact"
+      ],
+      "contains": true,
+      "dominant": true,
+      "secs": 8.9,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "1237b4fe",
+      "label": "evidence",
+      "gold": "observation",
+      "n_claims": 5,
+      "kinds": [
+        "fact",
+        "fact",
+        "fact",
+        "observation",
+        "fact"
+      ],
+      "contains": true,
+      "dominant": false,
+      "secs": 7.4,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "658b2489",
+      "label": "resolution",
+      "gold": "decision",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "observation",
+        "observation",
+        "observation",
+        "observation"
+      ],
+      "contains": false,
+      "dominant": false,
+      "secs": 7.5,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "d47747c4",
+      "label": "conclusion",
+      "gold": "fact",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "fact",
+        "decision",
+        "observation",
+        "decision"
+      ],
+      "contains": true,
+      "dominant": false,
+      "secs": 8.1,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "25b3f893",
+      "label": "resolution",
+      "gold": "decision",
+      "n_claims": 2,
+      "kinds": [
+        "observation",
+        "observation"
+      ],
+      "contains": false,
+      "dominant": false,
+      "secs": 2.9,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "0633fb4a",
+      "label": "evidence",
+      "gold": "observation",
+      "n_claims": 5,
+      "kinds": [
+        "fact",
+        "fact",
+        "observation",
+        "observation",
+        "hypothesis"
+      ],
+      "contains": true,
+      "dominant": true,
+      "secs": 6.7,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "659b7664",
+      "label": "conclusion",
+      "gold": "fact",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "observation",
+        "observation",
+        "observation",
+        "decision"
+      ],
+      "contains": false,
+      "dominant": false,
+      "secs": 6.7,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "0a708fa4",
+      "label": "conclusion",
+      "gold": "fact",
+      "n_claims": 4,
+      "kinds": [
+        "observation",
+        "decision",
+        "observation",
+        "observation"
+      ],
+      "contains": false,
+      "dominant": false,
+      "secs": 6.4,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "3fc23534",
+      "label": "resolution",
+      "gold": "decision",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "decision",
+        "observation",
+        "observation",
+        "observation"
+      ],
+      "contains": true,
+      "dominant": false,
+      "secs": 7.7,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "f23d63a4",
+      "label": "evidence",
+      "gold": "observation",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "observation",
+        "observation",
+        "fact",
+        "decision"
+      ],
+      "contains": true,
+      "dominant": true,
+      "secs": 8.2,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "60466c56",
+      "label": "resolution",
+      "gold": "decision",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "observation",
+        "observation",
+        "decision",
+        "observation"
+      ],
+      "contains": true,
+      "dominant": false,
+      "secs": 8.6,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "50438e23",
+      "label": "evidence",
+      "gold": "observation",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "observation",
+        "observation",
+        "observation",
+        "fact"
+      ],
+      "contains": true,
+      "dominant": true,
+      "secs": 9.0,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "d7885c88",
+      "label": "evidence",
+      "gold": "observation",
+      "n_claims": 4,
+      "kinds": [
+        "observation",
+        "observation",
+        "observation",
+        "fact"
+      ],
+      "contains": true,
+      "dominant": true,
+      "secs": 6.9,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "2957d758",
+      "label": "conclusion",
+      "gold": "fact",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "observation",
+        "observation",
+        "fact",
+        "plan"
+      ],
+      "contains": true,
+      "dominant": false,
+      "secs": 12.3,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "6e91a76e",
+      "label": "evidence",
+      "gold": "observation",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "observation",
+        "observation",
+        "observation",
+        "observation"
+      ],
+      "contains": true,
+      "dominant": true,
+      "secs": 7.7,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "4a845d27",
+      "label": "resolution",
+      "gold": "decision",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "observation",
+        "observation",
+        "observation",
+        "decision"
+      ],
+      "contains": true,
+      "dominant": false,
+      "secs": 5.2,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "34eb456c",
+      "label": "conclusion",
+      "gold": "fact",
+      "n_claims": 4,
+      "kinds": [
+        "observation",
+        "observation",
+        "plan",
+        "observation"
+      ],
+      "contains": false,
+      "dominant": false,
+      "secs": 4.8,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "229e2592",
+      "label": "resolution",
+      "gold": "decision",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "observation",
+        "fact",
+        "observation",
+        "observation"
+      ],
+      "contains": false,
+      "dominant": false,
+      "secs": 5.9,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "0736ff3f",
+      "label": "resolution",
+      "gold": "decision",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "observation",
+        "observation",
+        "observation",
+        "hypothesis"
+      ],
+      "contains": false,
+      "dominant": false,
+      "secs": 6.4,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "0633fb4a",
+      "label": "conclusion",
+      "gold": "fact",
+      "n_claims": 5,
+      "kinds": [
+        "decision",
+        "fact",
+        "practice",
+        "decision",
+        "observation"
+      ],
+      "contains": true,
+      "dominant": false,
+      "secs": 7.1,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "8f5c7e76",
+      "label": "resolution",
+      "gold": "decision",
+      "n_claims": 4,
+      "kinds": [
+        "observation",
+        "observation",
+        "observation",
+        "observation"
+      ],
+      "contains": false,
+      "dominant": false,
+      "secs": 5.1,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "6cedb4d0",
+      "label": "conclusion",
+      "gold": "fact",
+      "n_claims": 4,
+      "kinds": [
+        "fact",
+        "capability",
+        "observation",
+        "observation"
+      ],
+      "contains": true,
+      "dominant": false,
+      "secs": 5.4,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "9ec1dcee",
+      "label": "evidence",
+      "gold": "observation",
+      "n_claims": 4,
+      "kinds": [
+        "observation",
+        "decision",
+        "practice",
+        "observation"
+      ],
+      "contains": true,
+      "dominant": true,
+      "secs": 6.5,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "43b27a41",
+      "label": "resolution",
+      "gold": "decision",
+      "n_claims": 3,
+      "kinds": [
+        "observation",
+        "observation",
+        "fact"
+      ],
+      "contains": false,
+      "dominant": false,
+      "secs": 3.8,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "7717ec96",
+      "label": "conclusion",
+      "gold": "fact",
+      "n_claims": 3,
+      "kinds": [
+        "observation",
+        "decision",
+        "practice"
+      ],
+      "contains": false,
+      "dominant": false,
+      "secs": 3.7,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "9ec1dcee",
+      "label": "evidence",
+      "gold": "observation",
+      "n_claims": 4,
+      "kinds": [
+        "fact",
+        "fact",
+        "observation",
+        "observation"
+      ],
+      "contains": true,
+      "dominant": true,
+      "secs": 5.9,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "bb25c06b",
+      "label": "evidence",
+      "gold": "observation",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "fact",
+        "fact",
+        "observation",
+        "fact"
+      ],
+      "contains": true,
+      "dominant": false,
+      "secs": 10.5,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "898ee5f9",
+      "label": "conclusion",
+      "gold": "fact",
+      "n_claims": 3,
+      "kinds": [
+        "decision",
+        "fact",
+        "plan"
+      ],
+      "contains": true,
+      "dominant": false,
+      "secs": 6.4,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "50438e23",
+      "label": "hypothesis",
+      "gold": "hypothesis",
+      "n_claims": 3,
+      "kinds": [
+        "fact",
+        "observation",
+        "observation"
+      ],
+      "contains": false,
+      "dominant": false,
+      "secs": 5.5,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "8649127f",
+      "label": "conclusion",
+      "gold": "fact",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "fact",
+        "observation",
+        "plan",
+        "plan"
+      ],
+      "contains": true,
+      "dominant": false,
+      "secs": 8.4,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "6ccb04d9",
+      "label": "evidence",
+      "gold": "observation",
+      "n_claims": 5,
+      "kinds": [
+        "fact",
+        "fact",
+        "observation",
+        "observation",
+        "observation"
+      ],
+      "contains": true,
+      "dominant": true,
+      "secs": 9.9,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "346f2165",
+      "label": "blame",
+      "gold": "observation",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "fact",
+        "observation",
+        "observation",
+        "fact"
+      ],
+      "contains": true,
+      "dominant": true,
+      "secs": 7.6,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "e652528f",
+      "label": "resolution",
+      "gold": "decision",
+      "n_claims": 3,
+      "kinds": [
+        "observation",
+        "observation",
+        "decision"
+      ],
+      "contains": true,
+      "dominant": false,
+      "secs": 4.8,
+      "error": null,
+      "empty_raw": false
+    },
+    {
+      "ticket": "787681d2",
+      "label": "conclusion",
+      "gold": "fact",
+      "n_claims": 5,
+      "kinds": [
+        "observation",
+        "fact",
+        "observation",
+        "observation",
+        "decision"
+      ],
+      "contains": true,
+      "dominant": false,
+      "secs": 8.3,
+      "error": null,
+      "empty_raw": false
+    }
+  ]
+}
