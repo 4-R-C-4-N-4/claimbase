@@ -36,6 +36,8 @@
   .s .tag{display:none;font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;
     font-weight:700;margin-bottom:.3rem}
   .s[data-k] .tag{display:block}
+  .s[data-guess="1"]{border-left-style:dashed;opacity:.86}
+  .s[data-guess="1"] .tag::after{content:" · guess";font-weight:500;opacity:.7}
   .s[data-k]{border-left-color:var(--kc)}
   .s .tag{color:var(--kc)}
   .kinds{position:fixed;left:0;right:0;bottom:0;background:var(--card);
@@ -81,10 +83,14 @@
     <p>You are building the answer key that claimbase's claim extractor will be scored
        against. Each screen shows one passage from the guru corpus — a ticket, a design
        doc, a PR, or a memory note — split into sentences.</p>
-    <p><b>Mark every sentence that asserts something</b>, and pick what kind of assertion
-       it is. <b>Leave the rest unmarked.</b> Unmarked is a real answer, not a skipped one:
-       the extractor is scored on what it wrongly picks up as much as on what it misses,
-       so a passage where nothing is a claim is a useful screen.</p>
+    <p>Every sentence arrives <b>pre-labelled with a guess</b> (shown dashed). Your job is
+       to <b>correct the wrong ones and press ⏎</b> — leaving a row untouched accepts it.
+       Press <b>0</b> on any sentence that asserts nothing at all; that is a real answer,
+       since the extractor is scored on what it wrongly picks up as much as what it misses.</p>
+    <p class="dimline">The guesses come from plain keyword rules, deliberately <i>not</i> from
+       the model being tested — otherwise the answer key would just measure the model agreeing
+       with itself. Which rows you change is recorded, so the rules can be scored too, and they
+       become a baseline the extractor has to beat.</p>
     <p class="dimline">Rough guide — <b>fact</b>: a checkable statement about the world.
        <b>decision</b>: a choice that was made. <b>practice</b>: how work is currently done.
        <b>capability</b>: what a tool can do, whether or not it is used.
@@ -107,6 +113,9 @@ let items = [], kinds = [], idx = 0, sel = 0, marks = {};
 // what makes it recoverable in practice. Without it the data is intact and the
 // person still cannot get back to the screen they fumbled.
 let history = [];
+// Which rows the grader actually changed. Kept so anchoring is measurable: an
+// accepted guess is weaker evidence than a corrected one.
+let touched = new Set();
 
 async function load(){
   const r = await fetch("/api/queue").then(r=>r.json());
@@ -154,13 +163,18 @@ function render(){
       <span class="hint">POST /api/export writes eval/gold_extract.jsonl</span></div>`;
     return;
   }
-  const it = items[idx]; marks = {}; sel = 0; syncUndo();
+  const it = items[idx];
+  // Start from the guesses. Submitting without touching a row accepts it, so the
+  // work is "fix the wrong ones", not "label nine sentences".
+  marks = {...(it.payload.guesses || {})};
+  touched = new Set(); sel = 0; syncUndo();
   m.innerHTML = `<div class="src">${it.payload.source} · ${esc(it.payload.source_ref)}</div>` +
     it.payload.sentences.map((s,i)=>
       `<div class="s" data-i="${i}"><span class="tag"></span>${esc(s)}</div>`).join("") +
     `<p class="hint"><kbd>j</kbd>/<kbd>k</kbd> move · <kbd>1</kbd>–<kbd>9</kbd> mark kind ·
-      <kbd>0</kbd> clear · <kbd>⏎</kbd> submit · <kbd>s</kbd> skip · <kbd>u</kbd> back.
-      Leave a sentence unmarked if it is not a claim — the negatives matter as much as the marks.</p>`;
+      <kbd>0</kbd> not a claim · <kbd>⏎</kbd> submit · <kbd>s</kbd> skip · <kbd>u</kbd> back.
+      Dashed rows are guesses — leave them if right, retype if wrong,
+      <kbd>0</kbd> if the sentence asserts nothing.</p>`;
   m.querySelectorAll(".s").forEach(el=>{
     el.onclick = ()=>{ sel = +el.dataset.i; paint(); };
   });
@@ -171,20 +185,26 @@ function paint(){
     el.classList.toggle("sel", i===sel);
     const k = marks[i];
     if(k){ el.dataset.k = k; el.style.setProperty("--kc", `var(${KCOL[kinds.indexOf(k)%9]})`);
-           el.querySelector(".tag").textContent = k; }
-    else { delete el.dataset.k; el.querySelector(".tag").textContent = ""; }
+           el.querySelector(".tag").textContent = k;
+           if(touched.has(String(i))) delete el.dataset.guess; else el.dataset.guess = "1"; }
+    else { delete el.dataset.k; delete el.dataset.guess; el.querySelector(".tag").textContent = ""; }
   });
   const cur = document.querySelector(".s.sel");
   if(cur) cur.scrollIntoView({block:"nearest"});
 }
 function mark(n){
   const k = kinds[n-1]; if(!k) return;
-  marks[sel] = k; sel = Math.min(sel+1, items[idx].payload.sentences.length-1); paint();
+  marks[sel] = k; touched.add(String(sel));
+  sel = Math.min(sel+1, items[idx].payload.sentences.length-1); paint();
+}
+function clearMark(){
+  delete marks[sel]; touched.add(String(sel)); paint();   // "not a claim"
 }
 async function submit(verdict){
   const it = items[idx];
   const r = await fetch("/api/decision",{method:"POST",headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({item_id: it.id, verdict, payload:{marks}})}).then(r=>r.json());
+    body: JSON.stringify({item_id: it.id, verdict,
+      payload:{marks, guesses: it.payload.guesses || {}, touched: [...touched]}})}).then(r=>r.json());
   history.push({idx, marks: {...marks}, verdict});
   progress(r.progress); idx++; render();
 }
@@ -217,7 +237,7 @@ addEventListener("keydown", e=>{
   if(e.key==="j"||e.key==="ArrowDown"){ sel=Math.min(sel+1,n-1); paint(); e.preventDefault(); }
   else if(e.key==="k"||e.key==="ArrowUp"){ sel=Math.max(sel-1,0); paint(); e.preventDefault(); }
   else if(/^[1-9]$/.test(e.key)) mark(+e.key);
-  else if(e.key==="0"){ delete marks[sel]; paint(); }
+  else if(e.key==="0"||e.key==="Backspace"){ clearMark(); e.preventDefault(); }
   else if(e.key==="Enter") submit("graded");
   else if(e.key==="s") submit("skip");
   else if(e.key==="u"){ undo(); e.preventDefault(); }

@@ -127,6 +127,69 @@ def split_sentences(text: str) -> list[str]:
     return out[:25]
 
 
+# --- pre-annotation ----------------------------------------------------------
+#
+# Nine kinds x ~9 sentences x 49 screens is too much to author from scratch, so
+# the queue guesses and the grader corrects. Recognition beats recall — the same
+# reason the elicitation list ranked candidates instead of asking "what have you
+# stopped doing?".
+#
+# The guesser is deliberately RULE-BASED, not the model being scored. Pre-filling
+# with the extractor would make the gold set measure agreement with itself. These
+# rules are independent of it, so corrections are real signal — and the rules
+# double as a baseline the extractor has to beat, exactly as rg and chunk-RAG are
+# baselines for retrieval.
+#
+# Anchoring bias is still real: people accept a plausible wrong label more often
+# than they invent one. Mitigated by recording the guess alongside the final mark,
+# so accept-vs-change rate is measurable rather than assumed.
+
+_CUES: list[tuple[str, str]] = [
+    # order matters: first match wins, most specific first
+    ("hypothesis", r"\b(seems?|appears?|probably|might|may |could be|suggests?|"
+                   r"hypothes\w+|unclear|not sure|possibly|likely|I think|presumably|"
+                   r"worth checking|needs? (?:more )?(?:investigation|confirmation))\b"),
+    ("decision",   r"\b(decided|chose|chosen|opted|settled on|we will use|going with|"
+                   r"switch(?:ed)? to|adopt(?:ed)?|rejected|reverted|deferred|"
+                   r"agreed|resolved to|dropped in favou?r)\b"),
+    ("practice",   r"\b(always|never|workflow|the process|standard practice|we (?:run|use)|"
+                   r"should (?:run|use|be)|must (?:run|use|be)|do not (?:run|use)|"
+                   r"goes? through|handled by)\b"),
+    ("capability", r"\b(can |cannot |is able to|supports?|provides?|allows?|enables?|"
+                   r"accepts?|returns?|handles?|is idempotent|by design)\b"),
+    # TODO must not match the `todo/<id>` branch names and `todo:<id>` commit
+    # prefixes this corpus is full of — case-insensitively that fired on almost
+    # every ticket-linked sentence.
+    ("task",       r"\b(TODO(?![:/])|need to|needs to be|remains? to|still to do|"
+                   r"follow-?up|outstanding|left to)\b"),
+    ("plan",       r"\b(will |plan to|next step|upcoming|intend|going to|scheduled|"
+                   r"phase \d|once .* lands)\b"),
+    ("preference", r"\b(prefer|rather than|I'd like|we want|nicer|cleaner if|ideally)\b"),
+]
+_MEASURED = re.compile(r"\b\d+(?:\.\d+)?\s*(?:%|ms|s\b|chunks?|rows?|tokens?|F1|"
+                       r"precision|recall)|\b(?:F1|precision|recall|macro-F1)\s*[=:]")
+_REPORTED = re.compile(r"\b(found|observed|noticed|turned out|shows?|showed|"
+                       r"reported|logged|measured|confirmed)\b", re.I)
+
+
+def guess_kind(s: str) -> str:
+    """Best rule-based guess at a sentence's claim kind.
+
+    Never returns None: an unmarkable sentence has already been filtered out by
+    `is_gradable`, so the question here is only *which* kind, and `observation` is
+    the honest default for prose that reports something without hedging,
+    deciding, or describing a capability.
+    """
+    for kind, pattern in _CUES:
+        if re.search(pattern, s, re.I):
+            return kind
+    if _MEASURED.search(s):
+        return "fact"
+    if _REPORTED.search(s):
+        return "observation"
+    return "observation"
+
+
 @dataclass
 class Item:
     kind: str
@@ -235,6 +298,9 @@ def sample_segments(limit: int = 60, seed: int = 7) -> list[Item]:
                             "source": src,
                             "source_ref": ref,
                             "sentences": sents,
+                            # Pre-filled guesses. The grader corrects rather than
+                            # authors; both the guess and the final answer are kept.
+                            "guesses": {str(i): guess_kind(s) for i, s in enumerate(sents)},
                             "repo": (meta or {}).get("repo", ""),
                         },
                     )
@@ -261,6 +327,10 @@ def to_gold_jsonl(log: DecisionLog, items: dict[str, Item], out: Path) -> int:
                         # marks: {sentence_index: claim_kind}; unmarked = not a claim,
                         # which is as important as the positives.
                         "marks": d["payload"].get("marks", {}),
+                        # Kept so the rule-based pre-annotator can be scored against
+                        # the human, and so anchoring can be measured rather than
+                        # assumed away.
+                        "guesses": it.payload.get("guesses", {}),
                         "graded_at": d["at"],
                     }
                 )

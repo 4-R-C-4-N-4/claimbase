@@ -110,3 +110,33 @@ def test_last_graded_finds_the_undo_target(tmp_path: Path) -> None:
     assert log.last_graded() == "i1"
     log.append(Decision("i1", "retracted", {}))
     assert log.last_graded() is None
+
+
+def test_guesser_covers_each_kind() -> None:
+    from claimbase.review.queue import guess_kind
+
+    cases = {
+        "We decided to drop the 0.85 tier from auto-promotion entirely.": "decision",
+        "base F1 = 0.372 on the 181-run bench, well behind v1.": "fact",
+        "This probably needs more investigation before we act on it.": "hypothesis",
+        "sync_taxonomy.py is idempotent and safe to run on every TOML edit.": "capability",
+        "Always run clean_bodies.py after a re-chunk or the output stays pre-clean.": "practice",
+        "Next step is to wire the extractor into the nightly sweep.": "plan",
+    }
+    for text, expected in cases.items():
+        assert guess_kind(text) == expected, text
+
+
+def test_todo_branch_names_are_not_tasks() -> None:
+    """`todo/<id>` branches and `todo:<id>` commit prefixes are everywhere in this
+    corpus; a case-insensitive TODO cue fired on nearly every one."""
+    from claimbase.review.queue import guess_kind
+
+    assert guess_kind("Built on branch `todo/467f527c` with children T1-T9 landed.") != "task"
+    assert guess_kind("TODO: still need to backfill the concept_family rows.") == "task"
+
+
+def test_guess_is_never_empty() -> None:
+    from claimbase.review.queue import guess_kind
+
+    assert guess_kind("Some entirely neutral sentence about the corpus size here.")
