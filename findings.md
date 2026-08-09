@@ -184,3 +184,55 @@ rank with substantive ones. Indexing every structural claim may be actively harm
 to retrieval even when it is correct to *store* it. Worth deciding in P0.5 whether
 low-content structural claims belong in the vector index at all, or only in the
 graph.
+
+---
+
+## 2026-08-08 — The hand-grading queue was unnecessary work
+
+Built a 49-screen grading queue for `gold_extract`, then read it with a clear lens at
+the user's prompting. Most of it has no bearing on the application. A fair sample of
+what it asked to be labelled:
+
+- `` `slug` is `UNIQUE` but nullable — only set at generation time. ``
+- `` Build `queryText` from the concept label(s) + `definition` + `angle`. ``
+- `` `sources/manifest.toml` enumerates every source (URL, license, format, translator). ``
+
+**`claim_kind` earns its existence through supersession** (DESIGN §3.2: decisions
+invalidate prior decisions on the same subject; a hypothesis must never beat a fact).
+The label has consequences only where two claims about one subject collide over time.
+None of the above collides with anything, answers a question anyone would ask, or
+supersedes anything. Labelling them is pure cost.
+
+Two mistakes:
+
+1. **Sampled by source stratum and length** — which guarantees a representative slice
+   of the corpus and guarantees nothing about whether the label matters.
+2. **Built the instrument the plan named without checking it was needed.** The
+   end-to-end recall scoreboard already decides Phase 0. An extraction gold set is a
+   *diagnostic*, worth its cost only if it predicts that number; one drawn from
+   arbitrary implementation trivia does not.
+
+### The measurement was already free, and the plan said so
+
+728 passages / 256 KB of ticket prose carry **human-assigned kind labels already**,
+produced over four months as a side effect of the work:
+
+| existing label | count | maps to |
+|---|---|---|
+| `resolution` note | 622 | decision |
+| `analysis: conclusion` | 62 | fact |
+| `analysis: evidence` | 42 | observation |
+| `analysis: hypothesis` / `blame` | 1 / 1 | hypothesis / observation |
+
+PLAN §P0.5 already called this the "free second scoreboard" and the queue was built
+anyway. Extraction kind-agreement can be scored against these at zero grading cost.
+
+### What is genuinely missing, and it is small
+
+The free labels are badly skewed — **one** hypothesis in the entire corpus. So they
+cannot measure fact-vs-hypothesis, which PLAN §5 calls the headline extraction metric
+and which decides whether *"should homology ship?"* is answered correctly.
+
+That gap is ~15–20 passages of rellm research prose, not 450 sentences across 49
+screens. The review tool itself stays — it is Phase 2's conflict queue, which is real
+work — but `gold_extract` as sampled is scrapped.
