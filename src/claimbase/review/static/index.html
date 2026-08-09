@@ -49,6 +49,8 @@
   .act button{border-radius:9px;font-weight:600}
   .act .go{background:var(--ok);border-color:var(--ok);color:#fff}
   .act .skip{color:var(--dim)}
+  .act .undo{color:var(--dim)}
+  .act .undo:disabled{opacity:.35;cursor:default}
   .done{text-align:center;padding:4rem 1rem;color:var(--dim)}
   .done b{color:var(--fg);font-size:1.1rem;display:block;margin-bottom:.6rem}
   kbd{font:11px ui-monospace,monospace;border:1px solid var(--line);border-bottom-width:2px;
@@ -101,6 +103,10 @@
 <script>
 const KCOL = ["--k1","--k2","--k3","--k4","--k5","--k6","--k7","--k8","--k9"];
 let items = [], kinds = [], idx = 0, sel = 0, marks = {};
+// Append-only storage makes a mis-click recoverable in principle; this stack is
+// what makes it recoverable in practice. Without it the data is intact and the
+// person still cannot get back to the screen they fumbled.
+let history = [];
 
 async function load(){
   const r = await fetch("/api/queue").then(r=>r.json());
@@ -129,28 +135,31 @@ function buildKinds(){
     el.appendChild(b);
   });
   const act = document.createElement("div"); act.className="act";
-  act.innerHTML = `<button class="skip" id="bskip">skip</button>
+  act.innerHTML = `<button class="undo" id="bundo" disabled>↩ back</button>
+                   <button class="skip" id="bskip">skip</button>
                    <button class="go" id="bgo">submit ⏎</button>`;
   el.appendChild(act);
   el.hidden = false;
   document.getElementById("bgo").onclick = ()=>submit("graded");
   document.getElementById("bskip").onclick = ()=>submit("skip");
+  document.getElementById("bundo").onclick = undo;
 }
 function render(){
   const m = document.getElementById("main");
   if(idx >= items.length){
-    document.getElementById("kinds").hidden = true;
+    document.getElementById("kinds").hidden = history.length === 0;
+    syncUndo();
     m.innerHTML = `<div class="done"><b>Queue empty.</b>
       Nothing left to grade in this batch.<br>
       <span class="hint">POST /api/export writes eval/gold_extract.jsonl</span></div>`;
     return;
   }
-  const it = items[idx]; marks = {}; sel = 0;
+  const it = items[idx]; marks = {}; sel = 0; syncUndo();
   m.innerHTML = `<div class="src">${it.payload.source} · ${esc(it.payload.source_ref)}</div>` +
     it.payload.sentences.map((s,i)=>
       `<div class="s" data-i="${i}"><span class="tag"></span>${esc(s)}</div>`).join("") +
     `<p class="hint"><kbd>j</kbd>/<kbd>k</kbd> move · <kbd>1</kbd>–<kbd>9</kbd> mark kind ·
-      <kbd>0</kbd> clear · <kbd>⏎</kbd> submit · <kbd>s</kbd> skip.
+      <kbd>0</kbd> clear · <kbd>⏎</kbd> submit · <kbd>s</kbd> skip · <kbd>u</kbd> back.
       Leave a sentence unmarked if it is not a claim — the negatives matter as much as the marks.</p>`;
   m.querySelectorAll(".s").forEach(el=>{
     el.onclick = ()=>{ sel = +el.dataset.i; paint(); };
@@ -176,7 +185,30 @@ async function submit(verdict){
   const it = items[idx];
   const r = await fetch("/api/decision",{method:"POST",headers:{"Content-Type":"application/json"},
     body: JSON.stringify({item_id: it.id, verdict, payload:{marks}})}).then(r=>r.json());
+  history.push({idx, marks: {...marks}, verdict});
   progress(r.progress); idx++; render();
+}
+
+async function undo(){
+  // Re-open the previous screen with its marks restored. Correcting it appends a
+  // new decision that supersedes the old line — the log keeps both, so the record
+  // of what was fumbled survives alongside the correction.
+  if(!history.length) return;
+  const prev = history.pop();
+  // Retract server-side as well, so the item is pending again even if the page
+  // is reloaded before it is re-graded.
+  await fetch("/api/undo",{method:"POST",headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({item_id: items[prev.idx].id})})
+    .then(r=>r.json()).then(r=>{ if(r.progress) progress(r.progress); });
+  idx = prev.idx;
+  render();
+  marks = {...prev.marks};
+  sel = 0; paint(); syncUndo();
+}
+
+function syncUndo(){
+  const b = document.getElementById("bundo");
+  if(b) b.disabled = history.length === 0;
 }
 function esc(s){ return s.replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
 addEventListener("keydown", e=>{
@@ -188,6 +220,7 @@ addEventListener("keydown", e=>{
   else if(e.key==="0"){ delete marks[sel]; paint(); }
   else if(e.key==="Enter") submit("graded");
   else if(e.key==="s") submit("skip");
+  else if(e.key==="u"){ undo(); e.preventDefault(); }
 });
 load();
 </script>

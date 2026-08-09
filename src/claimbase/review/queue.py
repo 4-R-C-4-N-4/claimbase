@@ -164,7 +164,23 @@ class DecisionLog:
         return out
 
     def decided_ids(self) -> set[str]:
-        return {k for k, v in self.latest().items() if v["verdict"] != "skip"}
+        """Only a graded verdict removes an item from the queue.
+
+        `skip` and `retracted` both leave it pending, which is what makes undo
+        durable: retracting appends a line rather than deleting one, so the item
+        comes back after a reload and the fumble stays on the record.
+        """
+        return {k for k, v in self.latest().items() if v["verdict"] == "graded"}
+
+    def last_graded(self) -> str | None:
+        last = None
+        if not self.path.exists():
+            return None
+        for line in self.path.read_text().splitlines():
+            if line.strip():
+                d = json.loads(line)
+                last = d["item_id"] if d["verdict"] == "graded" else last
+        return last if last in self.decided_ids() else None
 
 
 def sample_segments(limit: int = 60, seed: int = 7) -> list[Item]:

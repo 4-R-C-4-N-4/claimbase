@@ -90,3 +90,23 @@ def test_bullets_stay_separate_and_fragments_drop() -> None:
 
 def test_truncated_sentence_is_rejected() -> None:
     assert split_sentences("This one runs off the end of the extract and never") == []
+
+
+def test_retraction_returns_an_item_to_the_queue(tmp_path: Path) -> None:
+    """Undo appends rather than deletes: the item is pending again and the fumbled
+    verdict is still on the record."""
+    log = DecisionLog(tmp_path / "d.jsonl")
+    log.append(Decision("i1", "graded", {"marks": {"0": "fact"}}))
+    assert log.decided_ids() == {"i1"}
+    log.append(Decision("i1", "retracted", {}))
+    assert log.decided_ids() == set()
+    assert len(log.path.read_text().strip().splitlines()) == 2
+
+
+def test_last_graded_finds_the_undo_target(tmp_path: Path) -> None:
+    log = DecisionLog(tmp_path / "d.jsonl")
+    log.append(Decision("i1", "graded", {}))
+    log.append(Decision("i2", "skip", {}))
+    assert log.last_graded() == "i1"
+    log.append(Decision("i1", "retracted", {}))
+    assert log.last_graded() is None

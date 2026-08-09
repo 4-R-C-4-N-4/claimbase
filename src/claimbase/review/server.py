@@ -87,6 +87,16 @@ def make_handler(state: State):
                 )
                 state.log.append(d)
                 self._json({"ok": True, "progress": state.progress()})
+            elif self.path == "/api/undo":
+                # Durable undo: append a retraction rather than delete a line, so
+                # the item returns to the queue and the original verdict is still
+                # on the record. Client-side history alone dies on reload.
+                item_id = body.get("item_id") or state.log.last_graded()
+                if not item_id:
+                    self._json({"ok": False, "error": "nothing to undo"})
+                    return
+                state.log.append(Decision(item_id=item_id, verdict="retracted", payload={}))
+                self._json({"ok": True, "item_id": item_id, "progress": state.progress()})
             elif self.path == "/api/export":
                 out = ROOT / "eval" / "gold_extract.jsonl"
                 n = to_gold_jsonl(state.log, state.items, out)
