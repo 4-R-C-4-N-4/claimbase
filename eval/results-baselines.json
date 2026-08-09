@@ -62,7 +62,7 @@
   {
     "id": "q007",
     "class": "factual",
-    "rg_ndcg": 0.43067655807339306,
+    "rg_ndcg": 0.5,
     "ch_ndcg": 1.0,
     "rg_stale": null,
     "ch_stale": null,
@@ -72,7 +72,7 @@
   {
     "id": "q008",
     "class": "factual",
-    "rg_ndcg": 0.31546487678572877,
+    "rg_ndcg": 0.3333333333333333,
     "ch_ndcg": 1.0,
     "rg_stale": null,
     "ch_stale": null,

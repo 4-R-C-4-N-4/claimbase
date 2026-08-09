@@ -74,7 +74,7 @@ def test_metric_claims_carry_bench_identity(tmp_path: Path) -> None:
     assert all(c.meta["bench"] for c in claims)
     f1 = next(c for c in claims if c.subject == "v3" and c.meta["metric"] == "F1")
     assert f1.meta["value"] == 0.486 and f1.meta["n"] == 181
-    assert f1.kind is Kind.FACT and f1.trust is Trust.HUMAN
+    assert f1.kind is Kind.OBSERVATION and f1.trust is Trust.HUMAN
 
 
 def test_human_table_format_is_parsed(tmp_path: Path) -> None:
@@ -98,7 +98,7 @@ def test_contributes_no_prose(tmp_path: Path) -> None:
     root = _bench(tmp_path, "b-2026-08-07T13-26-57Z", REPORT)
     src = RunArtifacts(root)
     ev = src.to_event(next(src.scan()))
-    assert all(c.kind is Kind.FACT for c in src.structured_claims(ev))
+    assert all(c.kind is Kind.OBSERVATION for c in src.structured_claims(ev))
 
 
 @live_only

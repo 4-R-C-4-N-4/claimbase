@@ -423,3 +423,52 @@ That is the honest state: **the capture path demonstrably adds an answer that no
 compiler could recover, and the supersession layer does not yet reliably promote it
 over the stale record.** The 904 open conflicts are where that gets decided, and
 resolving them is human work the design already budgets for.
+
+---
+
+## 2026-08-09 — Every conflict gets a lean; and one bad label cost the same score three times
+
+904 open conflicts handed to a human is not a review queue, it is a refusal to
+decide. `claimbase resolve` now leans on all of them, applies the confident leans,
+and ranks anything weak by impact so a person starts where it matters.
+
+    2299 conflicts resolved, 592 claims superseded, 0 requiring review
+      recency_replacing        1809
+      observations_accumulate   252
+      trust_asymmetry           238
+
+Leaning rules in precedence order: trust asymmetry (a human capture beats a model's
+reading of a doc — `trust.outranks()`, finally used for what it was written for),
+then kind precedence (a hypothesis never displaces a fact), then recency among
+replacing kinds, then coexistence for observations. Weak leans are recorded as the
+proposed answer and surfaced, never silently enacted; the impact ranking is how
+crowded the older claim's neighbourhood is, since a stale claim with many near
+neighbours dominates retrieval and an isolated one misleads nobody.
+
+### The lesson underneath it
+
+q005 lost its entire score **three times, through three different rules** —
+`metric_restatement`, then `trust_correction` keyed on trust tier, then
+`recency_replacing`. Each time the fix was to constrain the rule. Each time it came
+back through another route.
+
+The fault was never in the rules. **Adapter C labelled bench measurements `fact`**,
+and every recency rule correctly concluded that a later fact displaces an earlier
+one. A measurement is a report of one occasion — the definition of `observation`,
+and the reason observations accumulate rather than supersede. One wrong label at the
+source, three symptomatic patches, before the cause was seen.
+
+Relabelled at source and in the store: 140 claims, and the third rule became safe
+without being weakened.
+
+### Scoreboard
+
+| | rg | chunk-RAG | claims |
+|---|---|---|---|
+| nDCG@10 | 0.229 | 0.500 | **0.535** |
+| mislead-rate | 0.500 | **0.333** | **0.333** |
+
+q005 back to 1.000 where both baselines score 0.000. Mislead still tied at 0.333,
+pinned by q003 and q009 — the captured correction is retrievable and eight stale
+documents still outrank it. That is the open problem, and it is now the *only* one
+the conflict machinery has not addressed.

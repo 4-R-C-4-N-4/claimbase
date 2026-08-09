@@ -294,7 +294,7 @@ def main() -> None:
         f"{avg('rg_stale'):>5.3f} {avg('ch_stale'):>5.3f} {avg('cl_stale'):>5.3f}"
     )
     print("\nnDCG: higher is better.  ~ = mislead-rate: lower is better.")
-    print("claims = structured + extracted + captured; supersession active (900 superseded, 904 conflicts open).")
+    print("claims = structured + extracted + captured; supersession + conflict resolution active.")
     Path(__file__).parent.joinpath("results-baselines.json").write_text(json.dumps(rows, indent=2))
 
 

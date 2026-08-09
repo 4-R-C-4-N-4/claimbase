@@ -6,9 +6,11 @@ git; this one has a **directory** for a unit, takes its timestamp from the **pat
 prose, and feeds the extractor **nothing**. If the seam survives it unmodified the
 seam is probably real.
 
-It also produces the purest bitemporal claims available: "v2 F1 = 0.443 on the
-181-run bench" is a measurement with an exactly known assertion date, so the same
-metric restated by a later run supersedes with no inference at all.
+It produces the purest *dated* claims available: "v2 F1 = 0.443 on the 181-run
+bench" is a measurement with an exactly known assertion date. They are emitted as
+**observations, not facts** — a later run does not falsify an earlier reading, it
+adds another. An earlier draft of this docstring said the opposite and three
+supersession rules were built on it before the error was found.
 
 Two directories have no parseable timestamp in the name. They get `captured_at =
 None` rather than an invented date — DESIGN §4.4.
@@ -154,7 +156,14 @@ class RunArtifacts:
                 ),
                 subject=model,
                 predicate=metric,
-                kind=Kind.FACT,
+                # A measurement is a report of ONE occasion, not a statement about
+                # how things are — which is the definition of `observation`, and the
+                # reason observations accumulate rather than supersede. Labelling
+                # these `fact` made every recency rule treat a later bench run as
+                # falsifying an earlier one; it cost q005 its score three separate
+                # times, through three different rules, before the label itself was
+                # recognised as the fault.
+                kind=Kind.OBSERVATION,
                 # A measurement artifact is not model prose: a script computed it and
                 # the numbers are reproducible from cells.csv. This is the highest
                 # trust available in the corpus, and it must outrank curated memory.

@@ -207,6 +207,20 @@ def cmd_supersede(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_resolve(args: argparse.Namespace) -> int:
+    from .resolve import resolve
+
+    r = resolve(args.corpus)
+    print(f"  {r['total']} conflicts resolved, {r['claims_superseded']} claims superseded")
+    for rule, n in sorted(r["by_rule"].items(), key=lambda kv: -kv[1]):
+        print(f"    {rule:<26} {n:>5}")
+    weak = r["needs_review"]
+    print(f"\n  {len(weak)} low-confidence, ranked by impact (top 10):")
+    for v in weak[:10]:
+        print(f"    impact {v.impact:>4.0f}  lean={v.winner:<8} {v.rule}")
+    return 0
+
+
 def cmd_stats(args: argparse.Namespace) -> int:
     with connect() as conn:
         s = Store(conn).stats(args.corpus)
@@ -244,6 +258,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--corpus", default="guru")
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(fn=cmd_supersede)
+    p = sub.add_parser("resolve", help="lean on every conflict; rank the rest by impact")
+    p.add_argument("--corpus", default="guru")
+    p.set_defaults(fn=cmd_resolve)
     p = sub.add_parser("stats", help="what is in the store")
     p.add_argument("--corpus", default="guru")
     p.set_defaults(fn=cmd_stats)
