@@ -524,3 +524,59 @@ are not validated and a larger question set is entitled to overturn them.
 The honest headline is the mislead-rate, not the nDCG: 0.000 against 0.333 is
 categorical rather than marginal, and it is the one result that does not depend on
 weight magnitudes at all.
+
+---
+
+## 2026-08-09 — Answer-level bench: claimbase 3C+1P, grep 1C, and a regression I caused
+
+nDCG asks whether the right record ranked highly. An agent asks what the answer is,
+and the two come apart precisely where this project claims to be useful. So: same
+model, same turn budget, same questions, two toolsets — `recall` over MCP versus
+ripgrep plus file reads. Blind, order-randomised judging against the gold answers.
+
+| | CORRECT | PARTIAL | WRONG |
+|---|---|---|---|
+| claimbase | **3** | 1 | 5 |
+| grep | 1 | 0 | 8 |
+
+Claimbase wins clearly and **both are bad in absolute terms**. The tally is the least
+interesting output; three specific results are worth more.
+
+### q004 — a regression the ranking work introduced
+
+*"Why is `staged_edges.status` still pending after an auto-promote run?"* is a
+**capability** question: how does the tool behave. The agent answered *"because
+auto-promote was discontinued in July"* — true, irrelevant, confidently wrong as an
+answer.
+
+The currency boost that won q003 and q009 promotes the captured practice-change so
+strongly that it hijacks questions which are not about currency at all. This is the
+direct cost of mislead-rate 0.000, and it is the capability-vs-practice distinction
+appearing for a fourth time — now at the answer layer rather than in a supersession
+rule.
+
+**The fix is not a smaller weight.** Currency is evidence of relevance *only when the
+question is about the current state*. A question about mechanism should not receive
+a currency-boosted practice claim at all. Ranking needs to condition on what is being
+asked, which is a real piece of design rather than a tuning knob.
+
+### q001 — the judge is weak
+
+The answer reached the right conclusion and correctly identified the June reading as
+a measurement artifact, then garbled a number. That is PARTIAL by the rubric; the
+judge said WRONG. **The same 27B answers and judges**, and it is mediocre at both, so
+these tallies carry real noise and should not be quoted as precise.
+
+### q009 — the result grep cannot reach
+
+*"Should the 0.85 tier be auto-promoted?"* — claimbase CORRECT, grep answered *"the
+evidence does not contain any information regarding a 0.85 confidence edge tier."*
+No file states the answer, so no amount of searching finds it. That is the capture
+path paying off end to end, through the transport an agent actually uses.
+
+### What this bench is worth
+
+It escapes the tuning trap — a wrong answer is unambiguous where nDCG is not — but it
+inherits a weak judge and still rests on nine questions. Its value here was
+diagnostic: it found a regression that every retrieval metric scored as an
+improvement.

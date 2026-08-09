@@ -1,0 +1,174 @@
+[
+  {
+    "id": "q001",
+    "class": "stale_answer",
+    "question": "Does the base model beat the fine-tuned taggers?",
+    "claimbase": {
+      "answer": "No, the base model does not beat the fine-tuned taggers; the earlier observation that it did in the June benchmark was identified as a measurement artifact. Current human-graded results show the base model achieving a recall of 0.560 on the qwen3-4b-v3 benchmark.",
+      "trace": [
+        "SEARCH base model performance vs fine-tuned taggers"
+      ],
+      "verdict": "WRONG"
+    },
+    "grep": {
+      "answer": "Yes, the fine-tuned taggers beat the base model; the project explicitly states that no fine-tune is adopted as the production tagger without beating the base model on agreement metrics. Documentation confirms that fine-tuned models are \"dramatically better\" than the base and clarifies that a previous reading suggesting the base beats the fine-tunes was a \"bench blind spot.\"",
+      "trace": [
+        "GREP base.*fine.tune|fine.tune.*base|performance.*tagger|accuracy"
+      ],
+      "verdict": "WRONG"
+    }
+  },
+  {
+    "id": "q002",
+    "class": "stale_answer",
+    "question": "Should the homology scoring layer be wired into guru?",
+    "claimbase": {
+      "answer": "No, the homology scoring layer should not be wired into guru based on current evidence. This decision was made because the required base model has not been rotated by instruction or safety tuning on mind-attribution content.",
+      "trace": [
+        "SEARCH homology scoring layer wired into guru"
+      ],
+      "verdict": "WRONG"
+    },
+    "grep": {
+      "answer": "The homology scoring layer should not be wired into guru because it was explicitly omitted from the implementation in favor of a simpler tag-layer approach, as noted in the regression autopsy. Current documentation advises that if the layer is ever revisited, specific leads should be followed, indicating it is currently inactive and not part of the live system.",
+      "trace": [
+        "GREP homology.*scoring|homology.*layer"
+      ],
+      "verdict": "WRONG"
+    }
+  },
+  {
+    "id": "q003",
+    "class": "stale_answer",
+    "question": "Is auto-promote the current path for promoting staged edges?",
+    "claimbase": {
+      "answer": "No, auto-promote is no longer the current path for promoting staged edges; it was replaced by a guru-review queue-only flow where users manually apply the gate. As of August 2026, all tiers utilize this manual review process or automated review driven by Fable or Opus instead of auto-promotion.",
+      "trace": [
+        "SEARCH auto-promote current path for promoting staged edges"
+      ],
+      "verdict": "CORRECT"
+    },
+    "grep": {
+      "answer": "Yes, auto-promote is the current path for promoting high-confidence staged edges, as implemented by `scripts/auto_promote_edges.py` which moves rows with confidence \u2265 0.85 directly to the live `edges` table at tier='proposed' without human review. This automated process complements the manual review path (`review_edges.py`) reserved for lower-confidence or disputed edges that require human verification to reach tier='verified'.",
+      "trace": [
+        "GREP auto-promote|staged.*edge|promote.*staged",
+        "READ /home/ivy/Work/guru/scripts/auto_promote_edges.py"
+      ],
+      "verdict": "WRONG"
+    }
+  },
+  {
+    "id": "q004",
+    "class": "capability",
+    "question": "Why is staged_edges.status still 'pending' after an auto-promote run?",
+    "grep": {
+      "answer": "The provided grep search found no direct matches for `staged_edges.status` being set to 'pending', and the requested files were not read due to the tool call limit. Without seeing the specific logic in `route.ts` or `promote.rs`, I cannot determine why the status remains pending after an auto-promote run.",
+      "trace": [
+        "GREP staged_edges.status.*pending"
+      ],
+      "verdict": "WRONG"
+    },
+    "claimbase": {
+      "answer": "`staged_edges.status` remains 'pending' because the auto-promote mechanism was discontinued as of July 14, 2026, in favor of a queue-only flow where users must manually apply edges via `/guru-review-edges`. Consequently, no automated process now updates the status to 'live' without explicit user approval.",
+      "trace": [
+        "SEARCH staged_edges.status pending after auto-promote run"
+      ],
+      "verdict": "WRONG"
+    }
+  },
+  {
+    "id": "q005",
+    "class": "stale_answer",
+    "question": "What was v1's recall on the 130-chunk tagging gauge in May?",
+    "grep": {
+      "answer": "The provided evidence does not contain information about v1's recall on the 130-chunk tagging gauge in May, as the search for \"130-chunk\" yielded no matches and the specified files were not accessible or did not contain the relevant data. I cannot determine the specific metric value based on the current context.",
+      "trace": [
+        "GREP 130-chunk.*tagging.*gauge"
+      ],
+      "verdict": "WRONG"
+    },
+    "claimbase": {
+      "answer": "The provided evidence does not contain the recall value for v1 on the \"130-chunk tagging gauge\" in May. While a recall of 0.499 is recorded for v1 on the \"qwen3-4b-v3 bench\" in August, and a regression from 71.7 to 50.4 is noted for a v2 prompt in May, neither entry matches the specific gauge or version requested.",
+      "trace": [
+        "SEARCH v1 recall 130-chunk tagging gauge May"
+      ],
+      "verdict": "WRONG"
+    }
+  },
+  {
+    "id": "q006",
+    "class": "factual",
+    "question": "Which document describes the current guru architecture design?",
+    "claimbase": {
+      "answer": "The document `docs/guru-architecture.md` describes the current guru architecture design, including sections on the Starter Corpus and Corpus Extensibility. This document supersedes previous versions as of May 2, 2026.",
+      "trace": [
+        "SEARCH guru architecture design document current"
+      ],
+      "verdict": "WRONG"
+    },
+    "grep": {
+      "answer": "The document `guru-v2-proposal-revised.md` describes the current Guru architecture design, emphasizing simplicity, cost, solo operability, and auditability. No other document in the search results explicitly details the current architecture beyond this proposal.",
+      "trace": [
+        "GREP architecture.*design|design.*architecture"
+      ],
+      "verdict": "WRONG"
+    }
+  },
+  {
+    "id": "q007",
+    "class": "factual",
+    "question": "Where does the tradition list live \u2014 in each voice overlay or in CORE_RULES?",
+    "grep": {
+      "answer": "The tradition list lives in `CORE_RULES`, not in each voice overlay. This is confirmed by documentation stating the list was explicitly moved from voice drafts (like `VOICE-woowoo-draft.md`) into `CORE_RULES` to centralize it.",
+      "trace": [
+        "GREP tradition.*list|tradition_list"
+      ],
+      "verdict": "CORRECT"
+    },
+    "claimbase": {
+      "answer": "The tradition list now lives in CORE_RULES, having been moved from each voice overlay. This change was decided on 2026-05-14 and supersedes the previous arrangement where it resided in individual overlays.",
+      "trace": [
+        "SEARCH tradition list location voice overlay vs CORE_RULES"
+      ],
+      "verdict": "CORRECT"
+    }
+  },
+  {
+    "id": "q008",
+    "class": "factual",
+    "question": "What caused the qwen3-4b v2 regression?",
+    "claimbase": {
+      "answer": "The regression in qwen-3-4b-guru v2 was caused by tag-corpus contamination from the new-tradition review push and collateral interference, not a training problem. This issue was identified as the root cause on August 7, 2026, superseding previous assumptions.",
+      "trace": [
+        "SEARCH qwen3-4b v2 regression cause"
+      ],
+      "verdict": "PARTIAL"
+    },
+    "grep": {
+      "answer": "The provided evidence does not contain any information regarding a \"qwen3-4b v2 regression\" or its cause. No relevant entries were found in the CHANGELOG files or via grep search for this specific issue.",
+      "trace": [
+        "GREP qwen3-4b.*regression"
+      ],
+      "verdict": "WRONG"
+    }
+  },
+  {
+    "id": "q009",
+    "class": "stale_answer",
+    "question": "Should the 0.85 confidence edge tier be auto-promoted?",
+    "claimbase": {
+      "answer": "No, the 0.85 confidence edge tier should not be auto-promoted because auto-promote is no longer used for any confidence tier as of July 14, 2026. All tiers now exclusively follow a guru-review queue-only flow where the user retains the apply gate.",
+      "trace": [
+        "SEARCH \"0.85 confidence edge tier\" auto-promote policy"
+      ],
+      "verdict": "CORRECT"
+    },
+    "grep": {
+      "answer": "The provided evidence does not contain any information regarding a 0.85 confidence edge tier or its auto-promotion policy. Consequently, it is impossible to determine if this tier should be auto-promoted based on the current context.",
+      "trace": [
+        "GREP 0.85.*confidence.*edge.*tier.*auto.promot"
+      ],
+      "verdict": "WRONG"
+    }
+  }
+]
