@@ -360,3 +360,66 @@ put the proof after the thing it was meant to justify. A corrected gate measures
 mislead-rate with minimum-viable supersession implemented — which is a Phase 2
 capability, so either Phase 2 moves earlier or the gate moves later. That is a
 scoping decision for the user, not for me.
+
+---
+
+## 2026-08-09 — Supersession and capture: claims lead, on a harder question set
+
+Built the validity layer the Phase 0 verdict said was missing. Four rules attempted,
+**two were wrong and reverted**, and the reverts are the useful part.
+
+### What worked
+
+| rule | effect |
+|---|---|
+| `revision_removal` | 35 claims ended by the git commit that deleted their section |
+| `near_duplicate` (cosine ≥ 0.94) | 865 restatements folded away, freeing rank for distinct claims |
+| `trust_correction` (assert-scoped) | 18 stale claims ended by one captured correction |
+| `conflict_candidates` (0.80–0.94) | 904 conflicts **opened, not resolved** — the band where a machine cannot tell a changed mind from a different remark |
+
+### Two rules that were wrong
+
+**`metric_restatement` — reverted.** Superseding an earlier bench reading with a
+later one cost q005 its whole score (0.431 → 0.000). "v1 recall was 0.596 on 22 May"
+does not stop being true when a later run reports 0.509; it is a dated measurement,
+not a claim about current state. A later run *adds* an observation. Same shape as
+capability-vs-practice (§0.9): only claims about how things **are** can be
+superseded, and nobody writes those about metrics.
+
+**`trust_correction` keyed on trust tier — reverted.** One captured correction
+superseded **2,025 claims**, because bench measurements also carry `human` trust and
+the rule read them as corrections. Rescoped to claims captured through `assert`: what
+licenses the rule is the deliberate act of stating that something changed, not the
+trust tier alone. 3,294 → 18.
+
+### The scoreboard
+
+| | rg | chunk-RAG | claims |
+|---|---|---|---|
+| nDCG@10 | 0.218 | 0.500 | **0.535** |
+| mislead-rate | 0.500 | **0.333** | **0.333** |
+
+**Claims lead on nDCG for the first time — but the comparison is not clean.** q003
+and q009 only became scoreable once `assert` gave them a gold record, and they are
+the hardest questions in the set, so every column fell. The earlier 0.587 vs 0.667
+and this 0.535 vs 0.500 have different denominators and should not be read as a
+gain of one and a loss of the other.
+
+What is clean, because no denominator change touches it:
+
+- **q005: 0.000 for both baselines, 1.000 for claims.** A metric question that
+  embedding retrieval cannot reach at all, answered perfectly once bench tables
+  became claims and duplicates stopped crowding them.
+- **q009: 0.000 for both baselines, 0.387 for claims** — reachable only through the
+  captured correction.
+
+### Capture works; supersession has not yet cashed it
+
+Mislead is still 0.333 for claims, tied with chunk-RAG, and q003/q009 remain at
+1.000. The correction is in the graph and retrievable, and eight stale documents
+still outrank it. Eighteen supersessions were not the eighteen that mattered.
+
+That is the honest state: **the capture path demonstrably adds an answer that no
+compiler could recover, and the supersession layer does not yet reliably promote it
+over the stale record.** The 904 open conflicts are where that gets decided, and
+resolving them is human work the design already budgets for.

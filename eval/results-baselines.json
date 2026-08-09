@@ -22,11 +22,11 @@
   {
     "id": "q003",
     "class": "stale_answer",
-    "rg_ndcg": NaN,
-    "ch_ndcg": NaN,
+    "rg_ndcg": 0.0,
+    "ch_ndcg": 0.0,
     "rg_stale": 1.0,
     "ch_stale": 1.0,
-    "cl_ndcg": NaN,
+    "cl_ndcg": 0.0,
     "cl_stale": 1.0
   },
   {
@@ -46,7 +46,7 @@
     "ch_ndcg": 0.0,
     "rg_stale": 0.0,
     "ch_stale": 0.0,
-    "cl_ndcg": 0.43067655807339306,
+    "cl_ndcg": 1.0,
     "cl_stale": 0.0
   },
   {
@@ -82,11 +82,11 @@
   {
     "id": "q009",
     "class": "stale_answer",
-    "rg_ndcg": NaN,
-    "ch_ndcg": NaN,
-    "rg_stale": 0.0,
+    "rg_ndcg": 0.0,
+    "ch_ndcg": 0.0,
+    "rg_stale": 1.0,
     "ch_stale": 1.0,
-    "cl_ndcg": NaN,
+    "cl_ndcg": 0.38685280723454163,
     "cl_stale": 1.0
   }
 ]

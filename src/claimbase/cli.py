@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import tomllib
 from pathlib import Path
@@ -154,6 +155,58 @@ def cmd_embed(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_assert(args: argparse.Namespace) -> int:
+    """The capture path (DESIGN §5 `assert`).
+
+    Some corrections exist nowhere in the corpus — a practice abandoned without
+    anyone writing it down. No compiler recovers those, however good: it cannot
+    compile what was never captured. This is the write end of the same funnel
+    everything else goes through, so an asserted fact carries provenance and a
+    timestamp exactly like an imported one.
+    """
+    import uuid
+    from datetime import datetime, timezone
+
+    from .core.models import Event, Kind, Trust
+
+    ev = Event(
+        source="assert",
+        corpus=args.corpus,
+        source_ref=args.ref or f"assert:{datetime.now(timezone.utc):%Y-%m-%dT%H:%M:%SZ}",
+        content=args.text,
+        captured_at=datetime.now(timezone.utc),
+        meta={"kind": args.kind},
+    )
+    conn = connect()
+    store = Store(conn)
+    eid, inserted = store.upsert_event(ev)
+    with conn.cursor() as cur:
+        cur.execute(
+            """INSERT INTO claims (id, corpus, event_id, content, claim_kind, trust,
+                   corroborated, asserted_at, valid_from, confidence, status, meta)
+               VALUES (%s,%s,%s,%s,%s,%s,true,%s,%s,1.0,'active',%s)""",
+            (uuid.uuid4(), args.corpus, eid, args.text, args.kind,
+             # A human said it directly: the highest trust tier in the system, and
+             # the only path by which one enters other than a measurement artifact.
+             str(Trust.HUMAN), ev.captured_at, ev.captured_at,
+             json.dumps({"asserted": True})),
+        )
+    conn.commit()
+    conn.close()
+    print(f"  {'captured' if inserted else 'already present'}: {ev.source_ref}")
+    print(f"  {args.kind} / {Trust.HUMAN} — run `embed` then `supersede` to fold it in")
+    return 0
+
+
+def cmd_supersede(args: argparse.Namespace) -> int:
+    from .supersede import run
+
+    report = run(args.corpus, args.dry_run)
+    for rule, r in report.items():
+        print(f"  {rule:<22} found {r['found']:>6}  applied {r['applied']:>6}")
+    return 0
+
+
 def cmd_stats(args: argparse.Namespace) -> int:
     with connect() as conn:
         s = Store(conn).stats(args.corpus)
@@ -181,6 +234,16 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("embed", help="embed claims lacking a vector")
     p.add_argument("--corpus", default="guru")
     p.set_defaults(fn=cmd_embed)
+    p = sub.add_parser("assert", help="capture a fact directly (DESIGN §5)")
+    p.add_argument("text")
+    p.add_argument("--kind", default="practice")
+    p.add_argument("--ref", default=None)
+    p.add_argument("--corpus", default="guru")
+    p.set_defaults(fn=cmd_assert)
+    p = sub.add_parser("supersede", help="apply supersession rules")
+    p.add_argument("--corpus", default="guru")
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(fn=cmd_supersede)
     p = sub.add_parser("stats", help="what is in the store")
     p.add_argument("--corpus", default="guru")
     p.set_defaults(fn=cmd_stats)
