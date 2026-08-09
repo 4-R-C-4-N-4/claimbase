@@ -60,7 +60,12 @@ ANSWER: <your answer in two sentences or fewer>
 Be decisive. If the evidence shows something changed, say what is true NOW and note \
 what it replaced. If you cannot tell, say so plainly rather than guessing."""
 
-CLAIMBASE_TOOLS = 'SEARCH: <query>\n(searches a claim graph; results carry kind, trust, date and supersession standing)'
+CLAIMBASE_TOOLS = (
+    'SEARCH: <the question, in full>\n'
+    '(a claim graph, not a keyword index — pass the whole question, since phrasing '
+    'like "why is" or "still current" changes which claims are ranked highest; '
+    'results carry kind, trust, date and supersession standing)'
+)
 GREP_TOOLS = 'GREP: <pattern>\nREAD: <path>\n(ripgrep and file reads over the guru, guru-web and rellm repos)'
 
 JUDGE_SYS = """You grade an answer against a reference answer.

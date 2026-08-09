@@ -35,6 +35,7 @@ question set should re-fit the magnitudes and would be entitled to overturn them
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -58,7 +59,67 @@ W_CURRENCY = 0.5
 # compiler already adjudicated it — this claim won an argument against a specific
 # rival rather than merely being recent.
 W_SETTLED = 0.5
+W_AFFINITY = 0.4
 HALF_LIFE_DAYS = 120.0
+
+# --- question intent ---------------------------------------------------------
+#
+# Currency is evidence of relevance only when the question is ABOUT the current
+# state. Applied unconditionally it does real damage: asked "why is
+# staged_edges.status still pending after an auto-promote run?" — a question about
+# mechanism — the system answered "because auto-promote was discontinued in July",
+# which is true, irrelevant, and confidently wrong as an answer. The captured
+# practice-change outranked the capability claim that actually explains the
+# behaviour.
+#
+# No retrieval metric caught that; only the answer-level bench did. So intent is
+# classified here, cheaply and without a model — DESIGN §1.7, fat pipeline and thin
+# runtime — and it modulates both currency and which claim kinds are favoured.
+
+_MECHANISM = re.compile(
+    r"\b(why (?:is|are|does|do|did)|how (?:does|do|is|are)|what (?:does|do) \w+ do|"
+    r"what happens|explain|is it (?:a )?bug|intentional|by design|purpose of)\b", re.I
+)
+_CURRENT = re.compile(
+    r"\b(current(?:ly)?|now|still|these days|latest|nowadays|"
+    r"should (?:i|we|it)|do (?:i|we) still|are we still|what do (?:i|we) use)\b", re.I
+)
+_HISTORICAL = re.compile(
+    r"\b(was|were|used to|previously|back then|at the time|originally|"
+    r"in (?:january|february|march|april|may|june|july|august|september|october|"
+    r"november|december)|as of \d{4}|\bin \d{4})\b", re.I
+)
+
+# Which kinds answer which question. This is semantics, not tuning: a mechanism
+# question is answered by a statement of what a tool can do; a currency question by
+# a statement of how work is done now; a historical one by a dated report.
+AFFINITY: dict[str, dict[str, float]] = {
+    "mechanism":  {"capability": 1.0, "fact": 0.8, "observation": 0.3},
+    "current":    {"practice": 1.0, "decision": 0.8},
+    "historical": {"observation": 1.0, "fact": 0.6},
+    "neutral":    {},
+}
+# How much recency counts, per intent. A mechanism question gets none: how a tool
+# works does not become truer for being described recently.
+# `neutral` sits close to `current`, not halfway. An unmarked question about a live
+# project is implicitly about now — "does the base model beat the fine-tunes?" carries
+# no currency marker and still wants today's answer. Historical and mechanism are the
+# marked cases; assuming the present is the right default, and at 0.5 the stale
+# reading of q001 won.
+CURRENCY_BY_INTENT = {"mechanism": 0.0, "current": 1.0, "historical": 0.0, "neutral": 0.8}
+
+
+def classify_intent(query: str) -> str:
+    """Cheap, model-free, and checked in that order: mechanism first because "why is
+    X still pending" contains "still" and would otherwise read as a currency
+    question — which is exactly how q004 went wrong."""
+    if _MECHANISM.search(query):
+        return "mechanism"
+    if _HISTORICAL.search(query):
+        return "historical"
+    if _CURRENT.search(query):
+        return "current"
+    return "neutral"
 
 
 @dataclass
@@ -73,11 +134,12 @@ class Hit:
     cosine: float
     score: float
     superseded_count: int
+    intent: str = "neutral"
 
     def why(self) -> str:
         """Ranking has to be explainable, or an epistemic claim graph is just a
         vector store with opinions."""
-        bits = [f"cos {self.cosine:.3f}", self.kind, self.trust]
+        bits = [f"cos {self.cosine:.3f}", self.kind, self.trust, f"asked:{self.intent}"]
         if self.asserted_at:
             bits.append(f"{self.asserted_at:%Y-%m-%d}")
         if self.superseded_count:
@@ -101,6 +163,7 @@ def recall(
     candidates: int = 200,
     as_of: datetime | None = None,
     include_superseded: bool = False,
+    intent: str | None = None,
 ) -> list[Hit]:
     from .cli import _embed_one  # local import: embedding is a CLI-owned concern
 
@@ -125,20 +188,28 @@ def recall(
         )
         rows = cur.fetchall()
 
+    intent = intent if intent in AFFINITY else classify_intent(query)
+    currency_scale = CURRENCY_BY_INTENT[intent]
+    affinity = AFFINITY[intent]
+
     hits = []
     for cid, content, kind, trust, ts, ref, source, cosine, nsup in rows:
         t = TRUST_WEIGHT.get(trust, 0.0)
-        cur_ = _currency(kind, ts, now)
+        cur_ = _currency(kind, ts, now) * currency_scale
         settled = min(int(nsup or 0), 4) / 4.0
+        aff = affinity.get(kind, 0.0)
         score = (
             float(cosine)
             * (1 + W_TRUST * t)
             * (1 + W_CURRENCY * cur_)
             * (1 + W_SETTLED * settled)
+            * (1 + W_AFFINITY * aff)
         )
         hits.append(
             Hit(str(cid), content, kind, trust, ts, ref, source,
                 float(cosine), score, int(nsup or 0))
         )
     hits.sort(key=lambda h: -h.score)
+    for h in hits:
+        h.intent = intent
     return hits[:k]

@@ -580,3 +580,63 @@ It escapes the tuning trap — a wrong answer is unambiguous where nDCG is not �
 inherits a weak judge and still rests on nine questions. Its value here was
 diagnostic: it found a regression that every retrieval metric scored as an
 improvement.
+
+---
+
+## 2026-08-09 — Intent-conditioned ranking, and the limit of a 9-question bench
+
+### The fix q004 asked for
+
+Currency now scales by what the question is *asking*, classified without a model
+(DESIGN §1.7, thin runtime):
+
+| intent | currency | favoured kinds |
+|---|---|---|
+| mechanism (*why is / how does*) | 0.0 | capability, fact |
+| current (*still / currently / should we*) | 1.0 | practice, decision |
+| historical (*was / in May / used to*) | 0.0 | observation, fact |
+| neutral | 0.8 | — |
+
+Mechanism is tested first on purpose: *"why is X **still** pending"* contains a
+currency marker and is not a currency question, which is exactly how q004 went wrong.
+Neutral sits near current rather than halfway — an unmarked question about a live
+project implicitly means now; at 0.5 the stale reading of q001 won.
+
+Retrieval: **nDCG 0.679, mislead 0.000** against chunk-RAG's 0.500 / 0.333. Best on
+both axes.
+
+### The interface bug underneath it
+
+q004 still failed after the ranking fix, and for a reason worth keeping: the agent
+searched `"staged_edges.status pending after auto-promote"` — **it had stripped "why
+is" and "still"**, the exact tokens intent classification reads. Intent lives in the
+user's question; ranking was seeing the agent's keywords.
+
+The tool was implicitly advertising itself as a keyword index. It now asks for the
+question in full and says why, with an `intent` override available. A claim graph
+wants the sentence, not the search terms — and that is an interface property no
+retrieval metric would ever have surfaced.
+
+### The bench has hit its resolution limit
+
+Three agent runs, same 9 questions:
+
+| run | claimbase | grep |
+|---|---|---|
+| 1 | 3C 1P 5W | 1C 0P 8W |
+| 2 | 4C 1P 4W | 1C 1P 7W |
+| 3 | 3C 3P 3W | 1C 2P 6W |
+
+**The gap against grep is robust** — claimbase 6-of-9 not-wrong versus grep 3-of-9 on
+the best run, and it never lost a run. **The differences between my own ranking
+versions are not measurable here**: q005 went WRONG → CORRECT and q007 CORRECT →
+WRONG between runs with no relevant change in between.
+
+At n=9, with one 27B both answering and judging, variance swamps the effect being
+tuned. Further weight adjustment against this bench would be fitting noise, and the
+right response is to stop rather than to keep going and call the movement progress.
+
+What would raise the ceiling, in order: more questions (harvested from real MCP use,
+not synthesised), a judge that is not the system under test, and repeated runs per
+condition. Until then the defensible claims are the two categorical ones — mislead
+0.000 versus 0.333, and answers grep cannot reach at all.

@@ -46,7 +46,7 @@
     "ch_ndcg": 0.0,
     "rg_stale": 0.0,
     "ch_stale": 0.0,
-    "cl_ndcg": 0.0,
+    "cl_ndcg": 0.5,
     "cl_stale": 0.0
   },
   {
@@ -62,17 +62,17 @@
   {
     "id": "q007",
     "class": "factual",
-    "rg_ndcg": 0.5,
+    "rg_ndcg": 0.43067655807339306,
     "ch_ndcg": 1.0,
     "rg_stale": null,
     "ch_stale": null,
-    "cl_ndcg": 0.0,
+    "cl_ndcg": 0.3010299956639812,
     "cl_stale": null
   },
   {
     "id": "q008",
     "class": "factual",
-    "rg_ndcg": 0.31546487678572877,
+    "rg_ndcg": 0.3333333333333333,
     "ch_ndcg": 1.0,
     "rg_stale": null,
     "ch_stale": null,

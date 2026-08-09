@@ -52,17 +52,26 @@ def _fmt_hit(h) -> dict:
 
 @SERVER.tool()
 def recall(query: str, k: int = 8, as_of: str | None = None,
-           include_superseded: bool = False) -> dict:
-    """Search the claim graph.
+           include_superseded: bool = False, intent: str | None = None) -> dict:
+    """Answer a question from the claim graph.
+
+    PASS THE QUESTION, NOT KEYWORDS. Phrasing carries meaning the ranking uses:
+    "why is X still pending" is a question about mechanism and wants a durable
+    explanation, while "is X still the current path" is about currency and wants the
+    newest practice. Reduced to "X pending" both look identical and the wrong claims
+    win. Full questions retrieve at least as well here — this is not a keyword index.
 
     Returns claims ranked by epistemic standing — similarity, provenance, currency,
-    and whether a claim superseded others — each with its source, kind and assertion
-    date. Knows what is no longer true, which grep cannot.
+    and whether a claim superseded others — each with its source, kind, assertion
+    date, and the intent the question was read as.
 
     as_of: ISO date. Answers as the graph stood then ("what did I believe in June?").
+    intent: override if the reading looks wrong — mechanism | current | historical |
+    neutral.
     """
     return _dispatch("recall", {"query": query, "k": k, "as_of": as_of,
-                                "include_superseded": include_superseded})
+                                "include_superseded": include_superseded,
+                                "intent": intent})
 
 
 @SERVER.tool()
@@ -111,6 +120,7 @@ def _dispatch(name: str, args: dict) -> Any:
             hits = recall(
                 args["query"], conn=conn, corpus=CORPUS, k=int(args.get("k", 8)),
                 as_of=as_of, include_superseded=bool(args.get("include_superseded")),
+                intent=args.get("intent"),
             )
         return {"query": args["query"], "results": [_fmt_hit(h) for h in hits]}
 
