@@ -179,30 +179,27 @@ def to_gold_ref(source_ref: str) -> str:
 
 
 def claim_search(question: str, k: int = 10, active_only: bool = True) -> list[tuple[str, float]]:
-    """Vector search over claims, folded back to source records.
+    """Delegates to the shipped `claimbase.recall`.
 
-    Deliberately the plainest possible version: no graph expansion, no validity
-    filtering beyond active-only. If claims beat chunk-RAG here it is the atomicity
-    and the provenance doing the work, not clever retrieval on top.
+    An earlier version reimplemented retrieval here, which meant the scoreboard was
+    measuring a copy of the system rather than the system. Any ranking change had to
+    be made twice to show up, and a divergence between them would have been
+    invisible.
     """
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _sys.path.insert(0, str(_Path(__file__).resolve().parent.parent / "src"))
     import psycopg
 
-    q = embed([question])[0]
-    sql = """
-        SELECT e.source_ref, c.claim_kind, c.trust, c.valid_to,
-               1 - (c.embedding <=> %s::vector) AS sim
-        FROM claims c JOIN events e ON e.id = c.event_id
-        WHERE c.embedding IS NOT NULL {where}
-        ORDER BY c.embedding <=> %s::vector
-        LIMIT %s
-    """.format(where="AND c.status = 'active'" if active_only else "")
-    with psycopg.connect(DSN) as conn, conn.cursor() as cur:
-        cur.execute(sql, (str(q), str(q), k * 12))
-        rows = cur.fetchall()
+    from claimbase.recall import recall as _recall
+
+    with psycopg.connect(DSN) as conn:
+        hits = _recall(question, conn=conn, k=k * 4, include_superseded=not active_only)
     best: dict[str, float] = {}
-    for source_ref, _kind, _trust, _valid_to, sim in rows:
-        ref = to_gold_ref(source_ref)
-        best[ref] = max(best.get(ref, 0.0), float(sim))
+    for h in hits:
+        ref = to_gold_ref(h.source_ref)
+        best[ref] = max(best.get(ref, 0.0), h.score)
     return sorted(best.items(), key=lambda kv: -kv[1])[:k]
 
 

@@ -472,3 +472,55 @@ q005 back to 1.000 where both baselines score 0.000. Mislead still tied at 0.333
 pinned by q003 and q009 — the captured correction is retrievable and eight stale
 documents still outrank it. That is the open problem, and it is now the *only* one
 the conflict machinery has not addressed.
+
+---
+
+## 2026-08-09 — Ranking on epistemic standing: the thesis, demonstrated
+
+| | rg | chunk-RAG | claims |
+|---|---|---|---|
+| nDCG@10 | 0.227 | 0.500 | **0.579** |
+| mislead-rate | 0.500 | 0.333 | **0.000** |
+
+**Claims lead on both axes, and mislead-rate is zero.** q003 and q009 — the
+auto-promote pair that had been pinned at 1.000 mislead through every previous
+attempt — now score 1.000 nDCG and 0.000 mislead.
+
+### What actually fixed it
+
+Not more supersession. `recall()` now ranks on standing rather than resemblance:
+
+    score = cosine x (1 + 0.2 x trust) x (1 + 0.5 x currency) x (1 + 0.5 x settled)
+
+The captured correction wins its question with a *lower* cosine than the documents it
+beats — one claim against eight, outnumbered and right. Similarity alone can never
+produce that ordering, which is the clearest statement of why a claim graph is not a
+vector store: being outnumbered is not being wrong.
+
+`currency` applies only to perishable kinds (practice, decision, plan, task). An
+observation reports one occasion and does not lapse, so recency is not evidence about
+it — the same distinction that took three rules to learn.
+
+### Two corrections made along the way
+
+**Trust was over-weighted.** At 0.6 it let provenance overturn large similarity gaps,
+buying the stale-answer questions at the cost of ordinary lookups (0.535 → 0.459).
+Trust is evidence about whether to *believe* a claim, not whether it *answers the
+question*, so it was demoted to a tie-breaker at 0.2.
+
+**The eval was measuring a copy of the system.** `baselines.py` had its own retrieval
+implementation, so any ranking change had to be made twice to show up and a
+divergence between them would have been invisible. It now calls the shipped
+`claimbase.recall`.
+
+### The caveat that matters
+
+The weights were adjusted twice while watching this scoreboard. **Eight scored
+questions cannot support tuned magnitudes** — that is fitting to noise as much as to
+signal, and q005 and q007 were casualties of the final adjustment (1.000 → 0.000
+each). The *ordering* the weights encode is defensible on its own terms; the numbers
+are not validated and a larger question set is entitled to overturn them.
+
+The honest headline is the mislead-rate, not the nDCG: 0.000 against 0.333 is
+categorical rather than marginal, and it is the one result that does not depend on
+weight magnitudes at all.

@@ -207,6 +207,36 @@ def cmd_supersede(args: argparse.Namespace) -> int:
     return 0
 
 
+def _embed_one(text: str) -> list[float]:
+    """One embedding via Ollama. Shared by recall and the eval harness so the
+    scoreboard measures the shipped path rather than a copy of it."""
+    import json as _json
+    import urllib.request
+
+    payload = _json.dumps({"model": "nomic-embed-text:v1.5", "input": [text]}).encode()
+    req = urllib.request.Request(
+        "http://localhost:11434/api/embed", data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        return _json.loads(resp.read())["embeddings"][0]
+
+
+def cmd_recall(args: argparse.Namespace) -> int:
+    from .recall import recall
+
+    with connect() as conn:
+        hits = recall(args.query, conn=conn, corpus=args.corpus, k=args.k,
+                      include_superseded=args.include_superseded)
+    for h in hits:
+        print(f"\n  [{h.score:.3f}] {h.content[:300]}")
+        print(f"      {h.why()}")
+        print(f"      {h.source}: {h.source_ref}")
+    if not hits:
+        print("  (nothing)")
+    return 0
+
+
 def cmd_resolve(args: argparse.Namespace) -> int:
     from .resolve import resolve
 
@@ -258,6 +288,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--corpus", default="guru")
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(fn=cmd_supersede)
+    p = sub.add_parser("recall", help="query the claim graph")
+    p.add_argument("query")
+    p.add_argument("-k", type=int, default=8)
+    p.add_argument("--include-superseded", action="store_true")
+    p.add_argument("--corpus", default="guru")
+    p.set_defaults(fn=cmd_recall)
     p = sub.add_parser("resolve", help="lean on every conflict; rank the rest by impact")
     p.add_argument("--corpus", default="guru")
     p.set_defaults(fn=cmd_resolve)
