@@ -295,3 +295,68 @@ measurement without checking what it measures.
 
 What survives: extraction is mechanically sound — 0 errors, 0 parse failures, 4.3
 claims/passage, ~7s each. Kind accuracy is unmeasured, and honestly so.
+
+---
+
+## 2026-08-09 — PHASE 0 VERDICT: does not pass, and the gate was mis-specified
+
+Teacher run complete: 1,406 prose events, **6,253 claims, 0 failures, 0 parse
+errors**, 2 h 23 m at 6.1 s/event on the 3090 alone. Store now holds 11,666 claims
+(4,141 structured + 7,525 extracted), all embedded.
+
+| | rg | chunk-RAG | claims |
+|---|---|---|---|
+| nDCG@10 | 0.291 | **0.667** | 0.554 |
+| mislead-rate | 0.333 | **0.333** | **0.333** |
+
+Prose extraction moved claims from 0.225 to 0.554 — a large gain, and still a loss.
+
+### Against the stated gate (PLAN §1)
+
+1. beat `rg` — **pass** (0.554 vs 0.291)
+2. beat chunk-RAG — **FAIL** (0.554 vs 0.667)
+3. core names no source vocabulary — **pass** (zero commits touched `core/` across
+   six adapters)
+
+**Phase 0 does not pass.** Per the plan, that means stop and rethink rather than
+proceed to Phase 1.
+
+### But the gate could not have been passed, and that is the finding
+
+    status: active = 11666      valid_to set = 35
+    superseded_by = 0           conflicts = 0
+
+**Nothing is superseded. There are no conflicts.** `claim_search` filters
+`status='active'`, which excludes nothing, so the retrieval under test was *atomised
+claims versus chunks* — with the entire validity layer absent.
+
+That layer is Phase 2 by the plan's own sequencing. So Phase 0 was built to test the
+design's central thesis using only the half of the machinery that does not contain
+it. The thesis is *"atomic claims **with provenance and validity** beat chunks with
+similarity"*; what was measured is *"atomic claims beat chunks"*, and that is a
+different and much weaker claim — one there was never good reason to believe.
+
+Atomisation alone **should** lose. A chunk is 800 characters of context and embeds
+richly; a claim is one sentence and embeds narrowly. Folding both back to source
+records, the chunk wins on similarity almost by construction. Claims cannot earn
+their keep through atomisation; they can only earn it through knowing what is no
+longer true.
+
+The identical 0.333 mislead-rate across all three columns is the same fact stated
+directly: with no supersession, a claim graph is exactly as misleading as grep.
+
+### The one durable win
+
+**q005 — 0.000 for both baselines, 0.431 for claims.** The metric question neither
+baseline can answer at all, because a table of numbers carries no semantic signal.
+Adapter C turns bench tables into textual claims and makes them retrievable. That
+gain comes from *modelling*, not from retrieval cleverness, and no amount of better
+chunking reaches it.
+
+### What this actually says
+
+Not "the design is wrong". It says **the Phase 0 gate was the wrong experiment**: it
+put the proof after the thing it was meant to justify. A corrected gate measures
+mislead-rate with minimum-viable supersession implemented — which is a Phase 2
+capability, so either Phase 2 moves earlier or the gate moves later. That is a
+scoping decision for the user, not for me.
