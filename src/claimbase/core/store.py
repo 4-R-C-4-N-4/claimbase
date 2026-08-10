@@ -63,8 +63,35 @@ class Store:
             return str(cur.fetchone()[0]), False
 
     def replace_claims(self, event_id: str, claims: Iterable[Claim]) -> int:
+        """Replace only the claims THIS layer produced.
+
+        The importer and the extractor both write claims against the same event, on
+        different schedules and with different lifecycles. An unscoped delete here
+        destroyed 7,520 teacher-extracted claims on the first re-import — 2h23m of
+        GPU work — because the importer assumed it owned every claim on the event.
+
+        Adapter-derived claims are cheap to rebuild and are replaced every run.
+        Extractor-derived claims are expensive and survive, invalidated only by an
+        extractor-version bump, which `extract_run` handles by its own WHERE clause.
+        """
         with self.conn.cursor() as cur:
-            cur.execute("DELETE FROM claims WHERE event_id = %s", (event_id,))
+            # A claim about to be deleted may have superseded others. The FK is
+            # ON DELETE SET NULL so the delete succeeds, but that would leave those
+            # claims marked `superseded` while pointing at nothing — a state where
+            # recall hides them and no rule will ever reconsider them. Revert them
+            # to active first and let supersession decide again.
+            cur.execute(
+                """UPDATE claims SET status = 'active', superseded_by = NULL,
+                          valid_to = NULL, meta = meta - 'superseded_rule'
+                    WHERE superseded_by IN (
+                        SELECT id FROM claims
+                         WHERE event_id = %s AND NOT (meta ? 'extractor_version'))""",
+                (event_id,),
+            )
+            cur.execute(
+                "DELETE FROM claims WHERE event_id = %s AND NOT (meta ? 'extractor_version')",
+                (event_id,),
+            )
             n = 0
             for c in claims:
                 cur.execute(

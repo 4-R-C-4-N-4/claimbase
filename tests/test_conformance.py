@@ -243,3 +243,22 @@ def test_duplicate_registration_is_an_error() -> None:
     r.register(NoProseSource())
     with pytest.raises(ValueError, match="already registered"):
         r.register(NoProseSource())
+
+
+def test_reimport_must_not_destroy_extracted_claims() -> None:
+    """The importer and the extractor both write claims against one event. An
+    unscoped delete in `replace_claims` wiped 7,520 teacher-extracted claims on the
+    first re-import after supersession — hours of GPU work — so the scoping is
+    asserted here rather than trusted.
+    """
+    import inspect
+
+    from claimbase.core.store import Store
+
+    src = inspect.getsource(Store.replace_claims)
+    assert "extractor_version" in src, (
+        "replace_claims must exclude extractor-derived claims from its delete"
+    )
+    # Both the delete and the supersession-revert need the guard; the revert reaches
+    # claims by the same event_id and would strand extracted ones.
+    assert src.count("extractor_version") >= 2
