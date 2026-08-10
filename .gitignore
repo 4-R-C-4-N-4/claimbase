@@ -4,3 +4,5 @@ __pycache__/
 eval/.cache/
 eval/extract.log
 eval/results-bakeoff/
+eval/results-*.json
+eval/decisions.jsonl
