@@ -262,3 +262,22 @@ def test_reimport_must_not_destroy_extracted_claims() -> None:
     # Both the delete and the supersession-revert need the guard; the revert reaches
     # claims by the same event_id and would strand extracted ones.
     assert src.count("extractor_version") >= 2
+
+
+def test_entity_reset_cannot_reach_claims() -> None:
+    """`TRUNCATE entities CASCADE` destroyed 8,012 extracted claims: TRUNCATE follows
+    every FK regardless of ON DELETE, and claims.subject_id references entities.
+    The reset path must use DELETE, and the FK must be SET NULL."""
+    import inspect
+
+    from claimbase import resolve_entities
+
+    src = inspect.getsource(resolve_entities.reset)
+    # Check executable statements only — the docstring explains the hazard and so
+    # necessarily contains the word.
+    body = "\n".join(
+        ln for ln in src.splitlines()
+        if "cur.execute" in ln or "conn." in ln
+    )
+    assert "TRUNCATE" not in body.upper(), "entity reset must not TRUNCATE — it cascades into claims"
+    assert "DELETE FROM entities" in body

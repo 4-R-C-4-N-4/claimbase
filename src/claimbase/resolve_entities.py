@@ -85,6 +85,23 @@ class Index:
         return hits[0] if len(hits) == 1 else None
 
 
+def reset(corpus: str = "guru") -> None:
+    """Clear the entity tables safely.
+
+    Never `TRUNCATE entities CASCADE`: TRUNCATE follows every foreign key whatever
+    its ON DELETE action, and claims.subject_id references entities — so the cascade
+    reaches claims and removes hours of extraction. DELETE respects ON DELETE SET
+    NULL; TRUNCATE does not.
+    """
+    conn = connect()
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM entity_aliases")
+        cur.execute("DELETE FROM claim_entities")
+        cur.execute("DELETE FROM entities WHERE corpus = %s", (corpus,))
+    conn.commit()
+    conn.close()
+
+
 def run(corpus: str = "guru", repos: dict[str, Path] | None = None,
         dry_run: bool = False) -> dict:
     repos = repos or {

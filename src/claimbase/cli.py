@@ -260,6 +260,14 @@ def cmd_entities(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_link(args: argparse.Namespace) -> int:
+    from .link_entities import run
+
+    for k, v in run(args.corpus).items():
+        print(f"  {k:<18} {v:>8,}")
+    return 0
+
+
 def cmd_stats(args: argparse.Namespace) -> int:
     with connect() as conn:
         s = Store(conn).stats(args.corpus)
@@ -310,6 +318,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--corpus", default="guru")
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(fn=cmd_entities)
+    p = sub.add_parser("link", help="link claims to the entities they mention")
+    p.add_argument("--corpus", default="guru")
+    p.set_defaults(fn=cmd_link)
     p = sub.add_parser("stats", help="what is in the store")
     p.add_argument("--corpus", default="guru")
     p.set_defaults(fn=cmd_stats)
