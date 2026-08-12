@@ -119,3 +119,18 @@ def test_pr_branch_links_to_ticket(tmp_path: Path) -> None:
     src = PullRequests({"r": tmp_path}, cache=tmp_path)
     ev = src.to_event(next(src.scan()))
     assert any(e.dst.endswith("1360a074") for e in src.edges(ev))
+
+
+@live_only
+def test_commit_bodies_do_not_leak_into_paths() -> None:
+    """`--format=...%b` plus `--name-only` has no delimiter between a multi-line
+    body and the file list. Splitting on the first newline put body prose into
+    `paths`, and those became entities — 6,635 of 11,472 entity rows were commit
+    message text before this was found."""
+    src = GitLog({"guru": REPOS["guru"]})
+    bad = []
+    for u in src.scan():
+        for p in u["paths"]:
+            if any(c.isspace() for c in p) or p.startswith("-"):
+                bad.append((u["sha"][:8], p[:60]))
+    assert not bad[:5], f"prose leaked into paths: {bad[:5]}"

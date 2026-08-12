@@ -102,3 +102,20 @@ def test_live_corpus_has_dated_endings() -> None:
 def test_declared_types_pick_up_filename_conventions() -> None:
     types = {t.name for t in MarkdownDocs(REPOS).declared_types()}
     assert {"BRD", "IMPL"} <= types
+
+
+def test_backticked_prose_is_not_an_entity(tmp_path: Path) -> None:
+    """A backticked clause containing a dot and a slash is still a sentence. The
+    first filter required only those characters, and 57% of the entity table became
+    prose fragments."""
+    r = _repo(tmp_path)
+    (r / "docs" / "d.md").write_text(
+        "# D\n\nSee `guru CLI / RAG retriever path. The previous 2048 was small` "
+        "and also `src/lib/retriever.ts` plus `scripts/export.py`.\n"
+    )
+    _commit(r, "one")
+    src = MarkdownDocs({"r": r})
+    ev = src.to_event(next(src.scan()))
+    names = {m.text for m in src.entity_mentions(ev)}
+    assert "src/lib/retriever.ts" in names and "scripts/export.py" in names
+    assert not any(" " in n for n in names), names

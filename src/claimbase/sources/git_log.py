@@ -28,6 +28,12 @@ MECHANICAL = re.compile(
     r"^(merge (pull request|branch|remote)|bump|wip|fixup|squash|revert \"|\.\.\.)", re.I
 )
 SEP = "\x1e"
+# A commit body contains newlines, so `--format=...%b` followed by `--name-only`
+# gives no way to tell where the message stops and the file list starts. Splitting
+# on the first newline put every body line after the first into `paths`, and those
+# became "entities": 6,635 of 11,472 entity rows were commit prose. END marks the
+# body's end explicitly.
+END = "\x1f"
 
 
 class GitLog:
@@ -41,20 +47,25 @@ class GitLog:
     def scan(self) -> Iterator[object]:
         for repo, root in self.repos.items():
             out = subprocess.run(
-                ["git", "-C", str(root), "log", f"--format={SEP}%H%x00%cI%x00%an%x00%s%x00%b", "--name-only"],
+                ["git", "-C", str(root), "log",
+                 f"--format={SEP}%H%x00%cI%x00%an%x00%s%x00%b{END}", "--name-only"],
                 capture_output=True,
                 text=True,
             ).stdout
             for block in out.split(SEP):
                 if not block.strip():
                     continue
-                head, _, tail = block.partition("\n")
+                head, _, tail = block.partition(END)
                 parts = head.split("\x00")
                 if len(parts) < 4:
                     continue
                 sha, iso, author, subject = parts[0], parts[1], parts[2], parts[3]
                 body = parts[4] if len(parts) > 4 else ""
-                paths = [ln.strip() for ln in tail.splitlines() if ln.strip()]
+                # Only lines after the END marker are file paths, and a path never
+                # contains whitespace — belt and braces, since a malformed record
+                # here silently poisons the entity table rather than failing.
+                paths = [ln.strip() for ln in tail.splitlines()
+                         if ln.strip() and not any(c.isspace() for c in ln.strip())]
                 yield {
                     "repo": repo,
                     "sha": sha,

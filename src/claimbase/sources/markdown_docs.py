@@ -29,6 +29,16 @@ from ..core.contract import REGISTRY
 from ..core.models import Claim, Edge, Event, Kind, Mention, SchemaType, Trust
 from ..core.trust import apply_cap
 
+def _identifier_like(s: str) -> bool:
+    """A code identifier or path, not a sentence containing one."""
+    return (
+        5 <= len(s) <= 80
+        and not any(c.isspace() for c in s)
+        and ("_" in s or "." in s or "/" in s)
+        and s[0].isalnum()
+    )
+
+
 H2 = re.compile(r"^##\s+(.+)$", re.M)
 BACKTICK = re.compile(r"`([^`\n]{3,60})`")
 LINKED_PATH = re.compile(r"\]\(\.?/?([\w./-]+\.md)\)")
@@ -167,9 +177,14 @@ class MarkdownDocs:
         seen = set()
         for sym in BACKTICK.findall(event.content):
             sym = sym.strip()
-            if len(sym) >= 5 and ("_" in sym or "." in sym or "/" in sym) and sym not in seen:
-                seen.add(sym)
-                yield Mention(text=sym, event_id=event.id, entity_type=None)
+            # Whitespace is the discriminator. Requiring only a dot or a slash let
+            # whole clauses through — a backticked sentence like "guru CLI / RAG
+            # retriever path. The previous 2048 was..." satisfied both and became an
+            # "entity". 57% of the entity table was prose before this guard.
+            if not _identifier_like(sym) or sym in seen:
+                continue
+            seen.add(sym)
+            yield Mention(text=sym, event_id=event.id, entity_type=None)
 
     def edges(self, event: Event) -> Iterable[Edge]:
         m = event.meta

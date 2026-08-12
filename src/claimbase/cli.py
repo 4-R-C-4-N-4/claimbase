@@ -251,6 +251,15 @@ def cmd_resolve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_entities(args: argparse.Namespace) -> int:
+    from .resolve_entities import run
+
+    r = run(args.corpus, dry_run=args.dry_run)
+    for k, v in r.items():
+        print(f"  {k:<22} {v:>7,}")
+    return 0
+
+
 def cmd_stats(args: argparse.Namespace) -> int:
     with connect() as conn:
         s = Store(conn).stats(args.corpus)
@@ -297,6 +306,10 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("resolve", help="lean on every conflict; rank the rest by impact")
     p.add_argument("--corpus", default="guru")
     p.set_defaults(fn=cmd_resolve)
+    p = sub.add_parser("entities", help="resolve path-shaped entities against the filesystem")
+    p.add_argument("--corpus", default="guru")
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(fn=cmd_entities)
     p = sub.add_parser("stats", help="what is in the store")
     p.add_argument("--corpus", default="guru")
     p.set_defaults(fn=cmd_stats)
