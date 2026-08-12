@@ -19,6 +19,27 @@ CORPORA = ROOT / "corpora"
 HARNESSES = ROOT / "harnesses"
 
 
+# Commands that can destroy work. Extraction costs hours of GPU; entities and
+# links cost seconds. Anything that deletes or rewrites claims takes a snapshot
+# first, because both times claims were lost it was a command that looked routine.
+DESTRUCTIVE = {"import", "entities", "link", "supersede", "resolve"}
+
+
+def auto_backup(label: str) -> None:
+    import subprocess
+
+    script = ROOT / "scripts" / "backup_db.sh"
+    if not script.exists():
+        return
+    r = subprocess.run([str(script), label], capture_output=True, text=True)
+    if r.returncode == 0:
+        line = next((l for l in r.stdout.splitlines() if l.strip().startswith("ok:")), "ok")
+        print(f"  {line.strip()}")
+    else:
+        # A failed backup must stop the destructive command, not warn and continue.
+        raise SystemExit(f"  backup failed, refusing to proceed:\n{r.stderr.strip()}")
+
+
 def load_corpus(name: str) -> dict:
     with (CORPORA / f"{name}.toml").open("rb") as fh:
         spec = tomllib.load(fh)
@@ -288,6 +309,8 @@ def cmd_review(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="claimbase")
+    ap.add_argument("--no-backup", action="store_true",
+                    help="skip the pre-command snapshot (not advised)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("import", help="compile a corpus into the store")
     p.add_argument("--corpus", default="guru")
@@ -330,6 +353,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--limit", type=int, default=60)
     p.set_defaults(fn=cmd_review)
     args = ap.parse_args(argv)
+    if args.cmd in DESTRUCTIVE and not getattr(args, "dry_run", False) and not args.no_backup:
+        auto_backup(f"pre-{args.cmd}")
     return args.fn(args)
 
 

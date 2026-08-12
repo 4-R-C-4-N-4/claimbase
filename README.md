@@ -78,6 +78,12 @@ python -m claimbase supersede && python -m claimbase resolve
 python -m claimbase recall "is auto-promote still the promotion path?"
 ```
 
+Every command that can destroy work takes a verified snapshot first
+(`scripts/backup_db.sh`, `~/claimbase-backups/`), and refuses to run if the snapshot
+fails. Extraction costs hours of GPU and was lost twice before that existed — once
+to an unscoped delete, once to a `TRUNCATE CASCADE` that reached `claims` through a
+foreign key. "Derived data is rebuildable" is not the same as "free to lose".
+
 Extraction needs a local model server; everything else needs Postgres and Ollama.
 Corpora are declared in [`corpora/*.toml`](corpora/) — named, and never derived from
 the working directory.
