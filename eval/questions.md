@@ -33,3 +33,31 @@ Those scripts are unused; if they still work it's a coincidence.
 UNSURE:
 
 ---
+
+### How many traditions and texts are in the guru db locally?
+TRUE: The amount of traditions and texts must be verified in the DB and is not worth calling stable, it grows constantly.
+WRONG: The traditions can be read from references in PRs or documentation
+
+### Once a review on a tag or edge has been made with the guru review tool, is the change applied?
+TRUE: No. The apply gate is the final step in the loop and must be completed by a human.
+WRONG: The reviewed tags and edges are live. Once reviewed the agent can apply them.
+
+### Which database does the guru export seed?
+TRUE: First, the export seeds the local postgres docker environment. This is staging. After testing with guru-web, the same export is promoted to production by a human.
+WRONG: The guru export is sent directly to production.
+
+### Where does guru's production retrieval actually run?
+TRUE: The real retrieval query is in guru-web, which talks to the postgres db. This is what runs on production.
+WRONG: The search cli in guru reflects the retrieval algorithm in guru-web.
+
+### When an agent is reviewing a chunk for tag or edge reviews with the guru-review tool, is it required for the agent to read the entire chunks present, or can they bulk submit if the reviews are trending a certain direction?
+TRUE: The review agent should never submit reviews without reading each chunk provided and the reasoning from the local model.
+WRONG: The review tool allows for bulk calls so it is best to quickly review rather than optimize quality.
+ 
+### When adding a new text, the first step is to chunk the content.
+TRUE: The first step should always be manifest work, including source verifiation and license public domain.
+WRONG: Yes, a text can quickly be chunked without consideration of strata like author notes or footnotes or html artifacts.
+
+### Does the guru-web app allow users to reference the chunk source material on the site? Are the references hyperlinks?
+TRUE: Yes, each text is browsable chunk by chunk and the references after each query link to the chunk that was sent to the backend model.
+WRONG: The guru-web app is only a RAG system for comparative religion.
