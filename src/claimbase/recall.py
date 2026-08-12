@@ -60,7 +60,26 @@ W_CURRENCY = 0.5
 # rival rather than merely being recent.
 W_SETTLED = 0.5
 W_AFFINITY = 0.4
+# Entity overlap between question and claim. Lexical, and that is the point:
+# embeddings put `retriever.ts` and `retriever.py` almost on top of each other, so
+# similarity cannot separate two implementations sharing a name. The alias table
+# makes that identity survive path variation, and this is where it earns its place.
+W_ENTITY = 0.6
+# Naming a project is weaker evidence than naming a file, but it is the only hook
+# some questions offer — "where does PRODUCTION retrieval run" names no file at all.
+W_REPO = 0.3
 HALF_LIFE_DAYS = 120.0
+
+_ALIAS_CACHE: dict | None = None
+
+
+def _alias_map(conn) -> dict:
+    global _ALIAS_CACHE
+    if _ALIAS_CACHE is None:
+        from .link_entities import build_alias_map
+
+        _ALIAS_CACHE = build_alias_map(conn)
+    return _ALIAS_CACHE
 
 # --- question intent ---------------------------------------------------------
 #
@@ -135,6 +154,7 @@ class Hit:
     score: float
     superseded_count: int
     intent: str = "neutral"
+    entity_hit: bool = False
 
     def why(self) -> str:
         """Ranking has to be explainable, or an epistemic claim graph is just a
@@ -144,6 +164,8 @@ class Hit:
             bits.append(f"{self.asserted_at:%Y-%m-%d}")
         if self.superseded_count:
             bits.append(f"supersedes {self.superseded_count}")
+        if self.entity_hit:
+            bits.append("entity match")
         return " · ".join(bits)
 
 
@@ -192,22 +214,47 @@ def recall(
     currency_scale = CURRENCY_BY_INTENT[intent]
     affinity = AFFINITY[intent]
 
+    from .link_entities import entities_in, repos_in
+
+    q_entities = entities_in(query, _alias_map(conn))
+    q_repos = repos_in(query)
+    claim_ents: dict[str, set[str]] = {}
+    claim_repos: dict[str, set[str]] = {}
+    if q_entities or q_repos:
+        ids = [r[0] for r in rows]
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT ce.claim_id, ce.entity_id, e.canonical_name
+                     FROM claim_entities ce JOIN entities e ON e.id = ce.entity_id
+                    WHERE ce.claim_id = ANY(%s)""",
+                (ids,),
+            )
+            for cid, eid, name in cur.fetchall():
+                claim_ents.setdefault(str(cid), set()).add(str(eid))
+                if ":" in name:
+                    claim_repos.setdefault(str(cid), set()).add(name.split(":", 1)[0])
+
     hits = []
     for cid, content, kind, trust, ts, ref, source, cosine, nsup in rows:
         t = TRUST_WEIGHT.get(trust, 0.0)
         cur_ = _currency(kind, ts, now) * currency_scale
         settled = min(int(nsup or 0), 4) / 4.0
         aff = affinity.get(kind, 0.0)
+        ents = claim_ents.get(str(cid), set())
+        ent_hit = bool(q_entities & ents)
+        repo_hit = bool(q_repos & claim_repos.get(str(cid), set()))
         score = (
             float(cosine)
             * (1 + W_TRUST * t)
             * (1 + W_CURRENCY * cur_)
             * (1 + W_SETTLED * settled)
             * (1 + W_AFFINITY * aff)
+            * (1 + W_ENTITY * ent_hit)
+            * (1 + W_REPO * repo_hit)
         )
         hits.append(
             Hit(str(cid), content, kind, trust, ts, ref, source,
-                float(cosine), score, int(nsup or 0))
+                float(cosine), score, int(nsup or 0), entity_hit=ent_hit or repo_hit)
         )
     hits.sort(key=lambda h: -h.score)
     for h in hits:

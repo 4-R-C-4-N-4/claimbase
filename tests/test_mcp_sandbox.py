@@ -18,6 +18,26 @@ ROOT = Path(__file__).resolve().parent.parent
 PYTHON = ROOT / ".venv" / "bin" / "python"
 pytestmark = pytest.mark.skipif(not PYTHON.exists(), reason="venv not built")
 
+# The write-enabled probe used to insert into the live store and leave the row there;
+# three copies were found in the corpus later. Marked and removed instead.
+PROBE = "SANDBOX-PROBE-DO-NOT-KEEP"
+
+
+@pytest.fixture(autouse=True)
+def _purge_probe_rows():
+    yield
+    try:
+        import psycopg
+
+        from claimbase.core.store import DSN
+
+        with psycopg.connect(DSN) as conn, conn.cursor() as cur:
+            cur.execute("DELETE FROM claims WHERE content LIKE %s", (f"{PROBE}%",))
+            cur.execute("DELETE FROM events WHERE content LIKE %s", (f"{PROBE}%",))
+            conn.commit()
+    except Exception:
+        pass
+
 
 async def _session(write: bool):
     from mcp import ClientSession, StdioServerParameters
@@ -43,7 +63,8 @@ async def _tools_and_probe(write: bool):
             await s.initialize()
             names = {t.name for t in (await s.list_tools()).tools}
             res = await s.call_tool(
-                "assert_claim", {"text": "SANDBOX TEST must not persist", "kind": "observation"}
+                "assert_claim",
+                {"text": f"{PROBE} must not persist", "kind": "observation"},
             )
             body = res.content[0].text if res.content else ""
             return names, body

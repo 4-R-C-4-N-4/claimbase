@@ -122,9 +122,52 @@ def cmd_import(args: argparse.Namespace) -> int:
             f"edges {n_ed:>6}  entities {n_en:>5}  skipped {skipped:>4}"
         )
 
+    # Captured facts are events like any other, but no adapter produces them, so
+    # nothing regenerated their claims after the store was rebuilt — and the one
+    # answer the compiler could never recover was also the one it could not restore.
+    # Rebuilding them here makes capture derived, which is the guarantee the rest of
+    # the pipeline already keeps.
+    n_cap = rebuild_captured(store, conn, spec["name"])
+    if n_cap:
+        print(f"  {'captured':<16} claims {n_cap:>5}  (rebuilt from assert events)")
     print(f"\n  {'TOTAL':<16} {grand}")
     conn.close()
     return 0
+
+
+def rebuild_captured(store, conn, corpus: str) -> int:
+    """Recreate claims for `assert` events that have none."""
+    import uuid as _uuid
+
+    from .core.models import Kind, Trust
+
+    made = 0
+    with conn.cursor() as cur:
+        cur.execute(
+            """SELECT e.id, e.content, e.captured_at, e.meta, e.source_ref
+                 FROM events e
+                WHERE e.corpus = %s AND e.source = 'assert'
+                  AND NOT EXISTS (SELECT 1 FROM claims c WHERE c.event_id = e.id)""",
+            (corpus,),
+        )
+        for eid, content, ts, meta, ref in cur.fetchall():
+            meta = meta or {}
+            # A capture made through MCP is an agent's; one made on the CLI is the
+            # user speaking directly. The tier decides what the claim may assert.
+            via_mcp = meta.get("via") == "mcp"
+            trust = Trust.AGENT if via_mcp else Trust.HUMAN
+            kind = Kind(meta.get("kind", "observation" if via_mcp else "practice"))
+            cur.execute(
+                """INSERT INTO claims (id, corpus, event_id, content, claim_kind, trust,
+                       corroborated, asserted_at, valid_from, confidence, status, meta)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'active',%s)""",
+                (_uuid.uuid4(), corpus, eid, content, str(kind), str(trust),
+                 not via_mcp, ts, ts, 1.0 if not via_mcp else 0.7,
+                 json.dumps({"asserted": True, "rebuilt": True, **meta})),
+            )
+            made += 1
+    conn.commit()
+    return made
 
 
 def cmd_embed(args: argparse.Namespace) -> int:

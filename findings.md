@@ -640,3 +640,61 @@ What would raise the ceiling, in order: more questions (harvested from real MCP 
 not synthesised), a judge that is not the system under test, and repeated runs per
 condition. Until then the defensible claims are the two categorical ones — mislead
 0.000 versus 0.333, and answers grep cannot reach at all.
+
+---
+
+## 2026-08-12 — Entity resolution, linking, and the ranking calibration
+
+Extraction rebuilt (run `8f6a7e99`, 8,366 claims, 3h23m). Store: 12,778 claims,
+5,138 entities, 8,254 claim-entity links.
+
+### The calibration
+
+| | rg | chunk-RAG | claims (before) | claims (after) |
+|---|---|---|---|---|
+| nDCG@10 | 0.150 | 0.278 | 0.512 | 0.452 |
+| **mislead-rate** | 0.182 | 0.273 | 0.273 | **0.091** |
+
+The entity signal cuts mislead-rate by two thirds — three misleading questions down
+to one — and costs nDCG. That is the right trade for this system: nDCG asks whether
+a thing was findable, mislead-rate asks whether the answer was *wrong*, and a
+confidently stale answer is the failure this project exists to prevent.
+
+Claims now mislead on **one** of eleven scored questions against chunk-RAG's three.
+
+Entity matching is lexical against the alias table, deliberately. Embeddings put
+`retriever.ts` and `retriever.py` almost on top of each other, which is why q013
+failed; lexical identity is the signal similarity discards, and the alias table is
+what lets it survive path variation.
+
+### Three bugs the rebuild exposed, all mine
+
+**`TRUNCATE entities CASCADE` destroyed the claims table.** TRUNCATE follows every
+foreign key regardless of its ON DELETE action, and `claims.subject_id` references
+entities. 8,012 extracted claims — a second three-hour GPU run — lost to what was
+meant to be a rebuild of a derived lookup table. `subject_id` is now ON DELETE SET
+NULL, the reset path uses DELETE, and every destructive command takes a verified
+snapshot first.
+
+**Capture was not rebuildable.** `assert` events survived, but no adapter produces
+their claims, so nothing regenerated them — and the one answer a compiler can never
+recover was also the one it could not restore. That single missing claim accounted
+for the entire apparent regression: mislead 0.636 with it gone, 0.273 with it back.
+Captured facts now rebuild from their events like everything else.
+
+**A test was writing to the live store.** The MCP sandbox probe called
+`assert_claim` with writes enabled against the real database and left the rows
+behind; three copies were sitting in the corpus. Now marked and purged by a fixture.
+
+### What is still wrong
+
+q016 fell from 0.901 to 0.000 and q014 from 0.315 to 0.000 — the entity boost
+promotes claims that name a file over claims that answer the question, when the
+question happens to name a file. That is the same shape as the currency regression
+(over-weighting one signal until it hijacks unrelated questions), and it says the
+entity boost should be conditioned on intent too, not applied flat.
+
+q013 remains 0.000 for claims and 0.387 for rg despite being the question entity
+resolution was built for. The entities are correctly separated now; what is missing
+is a claim that states which one production uses, and the corpus does not contain
+one. Resolution made the distinction *representable*, not *answerable*.
