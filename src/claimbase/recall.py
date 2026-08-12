@@ -64,10 +64,19 @@ W_AFFINITY = 0.4
 # embeddings put `retriever.ts` and `retriever.py` almost on top of each other, so
 # similarity cannot separate two implementations sharing a name. The alias table
 # makes that identity survive path variation, and this is where it earns its place.
-W_ENTITY = 0.6
-# Naming a project is weaker evidence than naming a file, but it is the only hook
-# some questions offer — "where does PRODUCTION retrieval run" names no file at all.
-W_REPO = 0.3
+#
+# **Scaled by specificity, not applied flat.** A flat boost cost q016 its whole score
+# (0.901 -> 0.000) and q014 most of its own, because naming a repo matches most of
+# the candidate pool: "guru-web" is shared by hundreds of claims and says nothing,
+# while "retriever.ts" is shared by three and says a great deal. Weighting those
+# equally promotes claims that merely *mention* the subject over claims that answer
+# the question.
+#
+# Specificity is measured against the candidates actually retrieved, so it needs no
+# tuning and adapts per query: a match half the pool shares earns almost nothing, a
+# match two claims share earns nearly the full weight. This is inverse document
+# frequency doing the job a constant cannot.
+W_ENTITY = 0.8
 HALF_LIFE_DAYS = 120.0
 
 _ALIAS_CACHE: dict | None = None
@@ -220,6 +229,7 @@ def recall(
     q_repos = repos_in(query)
     claim_ents: dict[str, set[str]] = {}
     claim_repos: dict[str, set[str]] = {}
+    hit_counts: dict[str, int] = {}
     if q_entities or q_repos:
         ids = [r[0] for r in rows]
         with conn.cursor() as cur:
@@ -233,6 +243,13 @@ def recall(
                 claim_ents.setdefault(str(cid), set()).add(str(eid))
                 if ":" in name:
                     claim_repos.setdefault(str(cid), set()).add(name.split(":", 1)[0])
+        # How much of the candidate pool each query term matches. A term matching
+        # nearly everything is not evidence about anything.
+        for cid in {str(r[0]) for r in rows}:
+            for eid in q_entities & claim_ents.get(cid, set()):
+                hit_counts[eid] = hit_counts.get(eid, 0) + 1
+            for repo in q_repos & claim_repos.get(cid, set()):
+                hit_counts[repo] = hit_counts.get(repo, 0) + 1
 
     hits = []
     for cid, content, kind, trust, ts, ref, source, cosine, nsup in rows:
@@ -240,21 +257,26 @@ def recall(
         cur_ = _currency(kind, ts, now) * currency_scale
         settled = min(int(nsup or 0), 4) / 4.0
         aff = affinity.get(kind, 0.0)
-        ents = claim_ents.get(str(cid), set())
-        ent_hit = bool(q_entities & ents)
-        repo_hit = bool(q_repos & claim_repos.get(str(cid), set()))
+        matched = (q_entities & claim_ents.get(str(cid), set())) | (
+            q_repos & claim_repos.get(str(cid), set())
+        )
+        # Best specificity among the terms this claim matched: sharing one rare
+        # entity with the question beats sharing one ubiquitous repo.
+        n = max(len(rows), 1)
+        ent_signal = max(
+            (1.0 - hit_counts.get(term, n) / n for term in matched), default=0.0
+        )
         score = (
             float(cosine)
             * (1 + W_TRUST * t)
             * (1 + W_CURRENCY * cur_)
             * (1 + W_SETTLED * settled)
             * (1 + W_AFFINITY * aff)
-            * (1 + W_ENTITY * ent_hit)
-            * (1 + W_REPO * repo_hit)
+            * (1 + W_ENTITY * ent_signal)
         )
         hits.append(
             Hit(str(cid), content, kind, trust, ts, ref, source,
-                float(cosine), score, int(nsup or 0), entity_hit=ent_hit or repo_hit)
+                float(cosine), score, int(nsup or 0), entity_hit=bool(matched))
         )
     hits.sort(key=lambda h: -h.score)
     for h in hits:

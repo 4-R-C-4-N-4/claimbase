@@ -46,9 +46,9 @@ WRONG: The reviewed tags and edges are live. Once reviewed the agent can apply t
 TRUE: First, the export seeds the local postgres docker environment. This is staging. After testing with guru-web, the same export is promoted to production by a human.
 WRONG: The guru export is sent directly to production.
 
-### Where does guru's production retrieval actually run?
-TRUE: The real retrieval query is in guru-web, which talks to the postgres db. This is what runs on production.
-WRONG: The search cli in guru reflects the retrieval algorithm in guru-web.
+### Are tags safe to add with no extra context if proposed from the tagging process?
+TRUE: Tags can be accepted in review or added to the taxonomy beforehand, but must be assigned a family and domain, or else they are orphaned from the tag concept hierarchy.
+WRONG: Tags are static and do not change. Tags are not related to one another.
 
 ### When an agent is reviewing a chunk for tag or edge reviews with the guru-review tool, is it required for the agent to read the entire chunks present, or can they bulk submit if the reviews are trending a certain direction?
 TRUE: The review agent should never submit reviews without reading each chunk provided and the reasoning from the local model.
