@@ -12,11 +12,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 import uuid
 
 from .core.store import connect
-from .extract import EXTRACTOR_VERSION, extract
+from .extract import EXTRACTOR_VERSION, SYSTEM, extract
 
 # Sources whose content is prose worth extracting from. run_artifacts is tabular
 # and git_log is one-line subjects already captured structurally; neither has
@@ -52,7 +53,28 @@ def main() -> None:
     if args.limit:
         pending = pending[: args.limit]
 
-    print(f"  {len(pending)} events pending for {EXTRACTOR_VERSION}", flush=True)
+    # Record the run BEFORE extracting, so an interrupted run still leaves a
+    # traceable identity for the claims it did write. Without this a scoreboard
+    # cannot be attributed to the corpus that produced it, and two runs of the same
+    # code look like a regression (findings.md, 2026-08-11).
+    import hashlib
+
+    run_id = uuid.uuid4()
+    with conn.cursor() as cur:
+        cur.execute(
+            """INSERT INTO extractor_runs (id, corpus, version, model, temperature,
+                   seed, prompt_sha, n_events, meta)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (run_id, args.corpus, EXTRACTOR_VERSION, "Qwen3.5-27B-UD-Q4_K_XL.gguf",
+             float(os.environ.get("TEMP", 0.2)),
+             int(os.environ["SEED"]) if os.environ.get("SEED") else None,
+             hashlib.sha256(SYSTEM.encode()).hexdigest()[:16],
+             len(pending), json.dumps({"min_len": args.min_len})),
+        )
+    conn.commit()
+
+    print(f"  {len(pending)} events pending for {EXTRACTOR_VERSION} (run {str(run_id)[:8]})",
+          flush=True)
     t0, kept, held, failed = time.time(), 0, 0, 0
 
     for i, (eid, content, captured_at) in enumerate(pending, 1):
@@ -78,11 +100,12 @@ def main() -> None:
                 cur.execute(
                     """INSERT INTO claims (id, corpus, event_id, content, claim_kind,
                            trust, corroborated, asserted_at, valid_from, confidence,
-                           status, meta)
-                       VALUES (%s,%s,%s,%s,%s,'agent',false,%s,%s,%s,'active',%s)""",
+                           status, run_id, meta)
+                       VALUES (%s,%s,%s,%s,%s,'agent',false,%s,%s,%s,'active',%s,%s)""",
                     (uuid.uuid4(), args.corpus, eid, c.content, c.kind,
-                     captured_at, captured_at, c.confidence,
-                     json.dumps({"extractor_version": EXTRACTOR_VERSION, "extracted": True})),
+                     captured_at, captured_at, c.confidence, run_id,
+                     json.dumps({"extractor_version": EXTRACTOR_VERSION, "extracted": True,
+                                 "run_id": str(run_id)})),
                 )
                 kept += 1
         conn.commit()
@@ -95,8 +118,14 @@ def main() -> None:
                 flush=True,
             )
 
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE extractor_runs SET finished_at = now(), n_claims = %s WHERE id = %s",
+            (kept, run_id),
+        )
+    conn.commit()
     print(f"\n  done: kept {kept}, held {held}, failed {failed}, "
-          f"{(time.time() - t0) / 60:.1f} min", flush=True)
+          f"{(time.time() - t0) / 60:.1f} min  (run {str(run_id)[:8]})", flush=True)
     conn.close()
 
 
