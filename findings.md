@@ -698,3 +698,54 @@ q013 remains 0.000 for claims and 0.387 for rg despite being the question entity
 resolution was built for. The entities are correctly separated now; what is missing
 is a claim that states which one production uses, and the corpus does not contain
 one. Resolution made the distinction *representable*, not *answerable*.
+
+## 2026-08-21 — The reviewer eval, and the ranking's turn to be wrong
+
+The first sustained live traffic: the hermes reviewer (local Qwen3.8) ran ~42
+mechanism-phrased queries over the whole guru workbook through the MCP server,
+every one logged with its full response. Grading them against the store settled
+the standing attribution question: **the compiler is mostly fine; retrieval was
+the bottleneck.** Nearly every miss had active, *embedded*, on-target claims
+that lost the top-5 — the corpus-toml rule (missed under two phrasings, cosine
+ranks 1–2 for the query), node-15 publish, node-01/04, `--respect-reviewed`.
+Only three true supply gaps surfaced: the AGENTS.md GPU rule (extraction drop,
+now `assert:gpu-release`), node-08's mechanism (5 thin claims vs node-03's 24+),
+and the drift-remedy sentence.
+
+What the traffic exposed, and what shipped for it (commit `recall:` this date):
+
+- **Phrase sensitivity** — vector-only candidates missed distinctive-phrase
+  matches → lexical OR-of-lexemes leg over a new tsvector index (migration 007),
+  fused into one pool.
+- **Doc-naming queries** — "what does docs/ingest/03-acquire.md say", "workbook
+  node 3": content claims don't repeat their own path → provenance candidate leg
+  + W_REF, with node-number → filename translation.
+- **Scaffold crowding** — "documents §X" claims took 7 of 8 slots on a
+  failure-modes query → penalized (0.45×), not excluded.
+- **Cross-revision near-dups** — same fact from adjacent SHAs both active,
+  twice in one top-5 → token-Jaccard collapse at result time.
+- **Boosts as vetoes** — a linked cos-0.69 claim buried an unlinked cos-0.83
+  one; the q016/q014 note above called this shape early → W_ENTITY 0.8→0.55
+  plus a cosine-leader guarantee: the two most similar claims always make the
+  cut, standing orders everything above them.
+- **timeline was ILIKE-only** — "edge review node 14" returned empty against a
+  corpus full of node-14 history → semantic fallback, `matched_by` in the
+  response.
+
+Scoreboard: original 16 questions nDCG 0.407 → 0.43 with mislead 0.273 →
+**0.000**; the gold set grew to 27 with 11 regression questions taken straight
+from the reviewer log (q017–q027), and the expanded set lands at 0.488 / 0.000.
+The query log did exactly what it was built for: real questions from a real
+agent turned into the regression set the harvest could not supply.
+
+### What is still wrong
+
+q023 (chunk-id as citation) stays 0.000 — genuine vocabulary mismatch between
+question and claim, the class no lexical trick fixes; it wants either a better
+embedding or a captured claim that says it in answer-shaped words. Claims from
+banner-retired docs stay active and unmarked (retirement leaves no git deletion
+for valid_to to key on). Node-08 remains thin in the store; that is extraction
+depth, not ranking, and a targeted re-extract of the readability-gate doc is the
+fix. And the recall weights have now been adjusted while watching this larger
+scoreboard — 27 questions is better than eight, but the docstring's honesty
+clause still applies.
