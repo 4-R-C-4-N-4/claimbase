@@ -20,12 +20,17 @@ embedding. Nothing else — the model server is only needed for extraction.
 
 ## Using claimbase from hermes
 
-Hermes has a native MCP client; the same server is declared in
-`~/.hermes/config.yaml` under `mcp_servers:` (added 2026-08-21) and its tools
-appear to every hermes agent as `mcp_claimbase_recall`, `mcp_claimbase_timeline`,
-`mcp_claimbase_conflicts`, `mcp_claimbase_stats` after a gateway restart. The
-same write posture applies: `assert_claim` stays unregistered unless that config
-block passes `CLAIMBASE_MCP_WRITE: "1"`.
+Hermes has a native MCP client, but **each profile loads its own config**
+(`HERMES_HOME` points at the profile dir), so the server must be declared under
+`mcp_servers:` in every `~/.hermes/profiles/<name>/config.yaml` — a block in the
+root `~/.hermes/config.yaml` only reaches un-profiled sessions. As of 2026-08-21
+all five guru profiles (reviewer, driver, corpus-quality, explorer, guru-dev)
+carry the block, each with `CLAIMBASE_CLIENT: hermes-<profile>` so the query log
+keeps per-agent question distributions separable. Tools appear as
+`mcp_claimbase_recall`, `mcp_claimbase_timeline`, `mcp_claimbase_conflicts`,
+`mcp_claimbase_stats` after a gateway restart. The same write posture applies:
+`assert_claim` stays unregistered unless a profile's config block passes
+`CLAIMBASE_MCP_WRITE: "1"`.
 
 ## Blast radius
 
@@ -70,7 +75,7 @@ Keeping writes off breaks that chain, which is why the default is what it is.
 | tool | what it is for |
 |---|---|
 | `recall(query, k, as_of, include_superseded)` | The main entry. Ranked by epistemic standing, not similarity alone. `as_of` gives time travel: *"what did I believe in June?"* |
-| `timeline(subject)` | How belief about a subject changed, with each claim's status. Use when an answer may have **changed** rather than merely being unknown. |
+| `timeline(subject)` | How belief about a subject changed, with each claim's status. Use when an answer may have **changed** rather than merely being unknown. Matches the subject as a literal substring first (verbatim phrases work best); falls back to semantic similarity when nothing matches, and `matched_by` in the response says which happened. |
 | `conflicts()` | Contradictions the compiler could not settle. Empty is the normal state. |
 | `assert_claim(text, kind)` | Capture something the corpus does not record. |
 | `stats()` | What the corpus contains. |

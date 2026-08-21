@@ -155,6 +155,10 @@ def timeline(subject: str, limit: int = 20) -> dict:
 
     Matching claims in assertion order, showing which superseded which. Use when an
     answer may have changed rather than merely being unknown.
+
+    Matching is literal substring first (a phrase that appears verbatim in claim
+    text, e.g. a script name or table name works best); when that finds nothing,
+    it falls back to semantic similarity and the response says so via matched_by.
     """
     return _dispatch("timeline", {"subject": subject, "limit": limit})
 
@@ -231,6 +235,7 @@ def _dispatch_inner(name: str, args: dict) -> Any:
         }
 
     if name == "timeline":
+        matched_by = "substring"
         with connect() as conn, conn.cursor() as cur:
             cur.execute(
                 """
@@ -244,8 +249,39 @@ def _dispatch_inner(name: str, args: dict) -> Any:
                 (CORPUS, f"%{args['subject']}%", int(args.get("limit", 20))),
             )
             rows = cur.fetchall()
+            if not rows:
+                # A subject phrased in the caller's words rather than the corpus's
+                # ("edge review node 14") matches no claim verbatim; a timeline
+                # that answers only corpus-vocabulary subjects is a trap (found
+                # 2026-08-21, reviewer eval). Fall back to semantic neighbours,
+                # in assertion order, and say so — the caller can judge fit.
+                from .cli import _embed_one
+
+                cur.execute(
+                    """
+                    SELECT content, claim_kind, trust, status, asserted_at,
+                           valid_to, source_ref, source
+                    FROM (
+                        SELECT c.content, c.claim_kind, c.trust, c.status,
+                               c.asserted_at, c.valid_to, e.source_ref, e.source,
+                               1 - (c.embedding <=> %s::vector) AS cosine
+                        FROM claims c JOIN events e ON e.id = c.event_id
+                        WHERE c.corpus = %s AND c.asserted_at IS NOT NULL
+                          AND c.embedding IS NOT NULL
+                        ORDER BY cosine DESC
+                        LIMIT %s
+                    ) sub
+                    WHERE cosine >= 0.60
+                    ORDER BY asserted_at
+                    """,
+                    (str(_embed_one(args["subject"])), CORPUS,
+                     int(args.get("limit", 20))),
+                )
+                rows = cur.fetchall()
+                matched_by = "embedding_fallback"
         return {
             "subject": args["subject"],
+            "matched_by": matched_by,
             "_note": UNTRUSTED,
             "timeline": [
                 {

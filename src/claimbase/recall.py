@@ -9,6 +9,12 @@ cannot rank purely by resemblance.
 So similarity selects the candidates and standing orders them:
 
     score = cosine x (1 + trust) x (1 + currency) x (1 + settled)
+                   x (1 + affinity) x (1 + entity) x (1 + lexical)   [x scaffold penalty]
+
+Candidates come in through two legs — vector nearest-neighbours and a full-text
+match on distinctive phrasing (migration 007) — fused into one pool before
+scoring, and near-duplicate re-extractions are collapsed at result time so one
+fact cannot occupy two slots.
 
 - **trust** — a human capture or a measurement artifact outranks a model's reading
   of a document. This is `trust.outranks()` expressed as a ranking rather than a
@@ -76,7 +82,41 @@ W_AFFINITY = 0.4
 # tuning and adapts per query: a match half the pool shares earns almost nothing, a
 # match two claims share earns nearly the full weight. This is inverse document
 # frequency doing the job a constant cannot.
-W_ENTITY = 0.8
+# Tempered 0.8 -> 0.55 (2026-08-21): entity linking is coverage-biased — ticket
+# claims are densely linked, doc claims often not linked at all — so at 0.8 the
+# boost let a linked cos-0.69 claim bury an unlinked cos-0.83 one (q017). The
+# cosine-leader guarantee below is the backstop; this keeps the boost a strong
+# tie-breaker instead of a veto.
+W_ENTITY = 0.55
+# Lexical (full-text) match between question and claim, normalized against the
+# best lexical score in the candidate pool. Added after the 2026-08-21 reviewer
+# eval: vector-only retrieval repeatedly missed active, embedded claims whose
+# content shared distinctive *phrases* with the question ("review the chunker
+# config", "--respect-reviewed", "boilerplate-survey") while generic neighbours
+# won on cosine. Lexical candidates are fetched by websearch_to_tsquery and
+# fused into the same pool, so a distinctive phrase is a second way in — not a
+# separate ranking.
+W_LEXICAL = 0.6
+# Structural scaffold claims ("docs/X documents §Y", meta.field = 'heading')
+# exist for dating and structure tracking, not for answering. Left unpenalized
+# they crowd out content claims exactly when the query names a doc or section:
+# in the node-03 failure-modes query they took 7 of 8 result slots while the
+# actual failure-mode claims from the same doc sat below the cut. Penalized,
+# not excluded — "what does this doc cover" is still a legitimate question.
+SCAFFOLD_PENALTY = 0.45
+# A query that names a file ("what failure modes are in docs/ingest/03-acquire.md")
+# is asking about that document's *content*, but content claims rarely repeat
+# their own path, so neither cosine nor the lexical leg connects the two — the
+# 2026-08-21 eval showed such queries losing to topically-adjacent hub claims
+# while the named doc's claims sat unranked. Provenance is the link: boost
+# claims whose source_ref contains a path-shaped token from the query.
+W_REF = 0.7
+# Two claims this lexically similar are the same fact from adjacent revisions
+# of the same document (supersession links exact re-extractions but misses
+# paraphrase-level re-wordings). Observed burning two of five result slots on
+# one fact (sync_taxonomy pair, schema-diagrams pair). Collapsed at result
+# time: the higher-scored claim represents the fact.
+NEAR_DUP_JACCARD = 0.6
 HALF_LIFE_DAYS = 120.0
 
 _ALIAS_CACHE: dict | None = None
@@ -122,7 +162,13 @@ _HISTORICAL = re.compile(
 # question is answered by a statement of what a tool can do; a currency question by
 # a statement of how work is done now; a historical one by a dated report.
 AFFINITY: dict[str, dict[str, float]] = {
-    "mechanism":  {"capability": 1.0, "fact": 0.8, "observation": 0.3},
+    # practice/decision earn mechanism affinity too: "why is X done this way" and
+    # "why is X off-limits" classify as mechanism and are answered by a stated
+    # practice or a recorded decision, not only by capability claims — the
+    # node-15 and corpus-toml regressions (2026-08-21) were practice claims
+    # losing mechanism questions to boosted neighbours.
+    "mechanism":  {"capability": 1.0, "fact": 0.8, "practice": 0.5, "decision": 0.4,
+                   "observation": 0.3},
     "current":    {"practice": 1.0, "decision": 0.8},
     "historical": {"observation": 1.0, "fact": 0.6},
     "neutral":    {},
@@ -164,6 +210,8 @@ class Hit:
     superseded_count: int
     intent: str = "neutral"
     entity_hit: bool = False
+    lex: float = 0.0
+    scaffold: bool = False
 
     def why(self) -> str:
         """Ranking has to be explainable, or an epistemic claim graph is just a
@@ -175,7 +223,61 @@ class Hit:
             bits.append(f"supersedes {self.superseded_count}")
         if self.entity_hit:
             bits.append("entity match")
+        if self.lex:
+            bits.append(f"lex {self.lex:.2f}")
+        if self.scaffold:
+            bits.append("scaffold")
         return " · ".join(bits)
+
+
+_TOKEN = re.compile(r"[a-z0-9_./-]+")
+# Path-shaped tokens in a query: contain a slash, or look like a filename with a
+# code/doc extension. "node 03" is not a path; "docs/ingest/03-acquire.md" and
+# "chunk.py" are.
+_PATHISH = re.compile(r"[\w.-]*/[\w./-]+|\b[\w-]+\.(?:md|py|sh|toml|sql|ts|tsx|js|yml|yaml|json)\b")
+# Workbook nodes are named by number at least as often as by path ("workbook
+# node 3", "node 04", "D3 review") and the node docs encode the number in the
+# filename (docs/ingest/03-acquire.md, docs/dossiers/D3-review.md). Translate
+# the phrasing into a source_ref fragment so those queries reach the doc's
+# claims — the original "workbook node 3" miss from the 2026-08-21 eval.
+_NODE_NUM = re.compile(r"\bnode\s+0?(\d{1,2})\b", re.I)
+_PASSD_NODE = re.compile(r"\bD([1-6])\b")
+
+
+def _path_tokens(query: str) -> set[str]:
+    toks = {t.lower().strip("./") for t in _PATHISH.findall(query) if len(t) > 3}
+    toks |= {f"/{int(n):02d}-" for n in _NODE_NUM.findall(query)}
+    toks |= {f"/d{n}-" for n in _PASSD_NODE.findall(query)}
+    return toks
+
+
+def _near_dup(a: str, b: str) -> bool:
+    """Token-Jaccard near-duplicate test for result collapse.
+
+    The duplicates this exists for are re-extractions of the same sentence from
+    adjacent revisions of one document — near-verbatim, so a cheap set overlap
+    separates them cleanly from claims that merely share a topic. Embeddings are
+    deliberately not used here: topical neighbours sit close in vector space,
+    and collapsing those would erase corroboration."""
+    ta, tb = set(_TOKEN.findall(a.lower())), set(_TOKEN.findall(b.lower()))
+    if not ta or not tb:
+        return False
+    return len(ta & tb) / len(ta | tb) >= NEAR_DUP_JACCARD
+
+
+def _collapse_near_dups(hits: list["Hit"], k: int) -> list["Hit"]:
+    """Greedy top-k selection skipping near-duplicates of already-kept hits.
+
+    Ranking order is preserved; the best-scored member of each duplicate family
+    represents the fact and the rest yield their slots to distinct claims."""
+    kept: list[Hit] = []
+    for h in hits:
+        if any(_near_dup(h.content, p.content) for p in kept):
+            continue
+        kept.append(h)
+        if len(kept) == k:
+            break
+    return kept
 
 
 def _currency(kind: str, asserted_at: datetime | None, now: datetime) -> float:
@@ -209,7 +311,8 @@ def recall(
             SELECT c.id, c.content, c.claim_kind, c.trust, c.asserted_at,
                    e.source_ref, e.source,
                    1 - (c.embedding <=> %(v)s::vector) AS cosine,
-                   (SELECT count(*) FROM claims s WHERE s.superseded_by = c.id)
+                   (SELECT count(*) FROM claims s WHERE s.superseded_by = c.id),
+                   c.meta, 0.0 AS lex
             FROM claims c JOIN events e ON e.id = c.event_id
             WHERE c.corpus = %(corpus)s AND c.embedding IS NOT NULL {where} {asof}
             ORDER BY c.embedding <=> %(v)s::vector
@@ -218,6 +321,89 @@ def recall(
             {"v": str(vec), "corpus": corpus, "cand": candidates, "now": now},
         )
         rows = cur.fetchall()
+
+    # The lexical leg: candidates the distinctive phrasing reaches that cosine's
+    # top-N missed. Fused into one pool — same scoring, one extra signal — so
+    # this widens candidate selection rather than adding a second ranking.
+    #
+    # OR-of-lexemes, not websearch semantics: websearch_to_tsquery ANDs every
+    # term, and a full natural-language question matches nothing under AND. An
+    # OR query lets ts_rank_cd reward the claims that match *many* of the
+    # question's lexemes with proximity, which is the phrase signal we want.
+    #
+    # Guarded: on a store without migration 007 the recall degrades to
+    # vector-only instead of failing the whole call.
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                WITH q AS (
+                    SELECT to_tsquery('english',
+                               string_agg('''' || w.lexeme || '''', ' | ')) AS tsq
+                    FROM (SELECT DISTINCT lexeme
+                          FROM unnest(to_tsvector('english', %(q)s))) w
+                )
+                SELECT c.id, c.content, c.claim_kind, c.trust, c.asserted_at,
+                       e.source_ref, e.source,
+                       1 - (c.embedding <=> %(v)s::vector) AS cosine,
+                       (SELECT count(*) FROM claims s WHERE s.superseded_by = c.id),
+                       c.meta, ts_rank_cd(c.content_tsv, q.tsq, 1) AS lex
+                FROM claims c JOIN events e ON e.id = c.event_id, q
+                WHERE c.corpus = %(corpus)s AND c.embedding IS NOT NULL
+                  AND c.content_tsv @@ q.tsq {where} {asof}
+                ORDER BY lex DESC
+                LIMIT %(lexcand)s
+                """,
+                {"v": str(vec), "q": query, "corpus": corpus,
+                 "lexcand": max(candidates // 4, 40), "now": now},
+            )
+            lex_rows = cur.fetchall()
+    except Exception:
+        conn.rollback()
+        lex_rows = []
+
+    # The provenance leg: when the query names a document or workbook node, the
+    # named doc's claims are candidates by fiat — content claims rarely repeat
+    # their own path, so neither cosine nor lexemes reliably connects "what does
+    # docs/ingest/03-acquire.md say" to the claims extracted from it (W_REF then
+    # ranks them; this fetch just gets them into the room).
+    ref_rows: list = []
+    q_paths = _path_tokens(query)
+    if q_paths:
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT c.id, c.content, c.claim_kind, c.trust, c.asserted_at,
+                           e.source_ref, e.source,
+                           1 - (c.embedding <=> %(v)s::vector) AS cosine,
+                           (SELECT count(*) FROM claims s WHERE s.superseded_by = c.id),
+                           c.meta, 0.0 AS lex
+                    FROM claims c JOIN events e ON e.id = c.event_id
+                    WHERE c.corpus = %(corpus)s AND c.embedding IS NOT NULL
+                      AND lower(e.source_ref) LIKE ANY(%(pats)s) {where} {asof}
+                    ORDER BY c.embedding <=> %(v)s::vector
+                    LIMIT 40
+                    """,
+                    {"v": str(vec), "corpus": corpus, "now": now,
+                     "pats": [f"%{p}%" for p in q_paths]},
+                )
+                ref_rows = cur.fetchall()
+        except Exception:
+            conn.rollback()
+
+    by_id = {r[0]: list(r) for r in rows}
+    for r in lex_rows:
+        if r[0] in by_id:
+            by_id[r[0]][10] = r[10]  # vector candidate that also matched lexically
+        else:
+            by_id[r[0]] = list(r)
+    for r in ref_rows:
+        by_id.setdefault(r[0], list(r))
+    rows = list(by_id.values())
+    # Normalize against the pool's best lexical score: ts_rank_cd is unbounded
+    # and corpus-dependent, so only the relative standing means anything.
+    max_lex = max((r[10] for r in rows), default=0.0) or 1.0
 
     intent = intent if intent in AFFINITY else classify_intent(query)
     currency_scale = CURRENCY_BY_INTENT[intent]
@@ -252,7 +438,7 @@ def recall(
                 hit_counts[repo] = hit_counts.get(repo, 0) + 1
 
     hits = []
-    for cid, content, kind, trust, ts, ref, source, cosine, nsup in rows:
+    for cid, content, kind, trust, ts, ref, source, cosine, nsup, meta, lex in rows:
         t = TRUST_WEIGHT.get(trust, 0.0)
         cur_ = _currency(kind, ts, now) * currency_scale
         settled = min(int(nsup or 0), 4) / 4.0
@@ -266,6 +452,10 @@ def recall(
         ent_signal = max(
             (1.0 - hit_counts.get(term, n) / n for term in matched), default=0.0
         )
+        lex_norm = float(lex or 0.0) / max_lex
+        scaffold = bool(meta) and meta.get("field") == "heading"
+        ref_l = (ref or "").lower()
+        ref_match = any(p in ref_l for p in q_paths)
         score = (
             float(cosine)
             * (1 + W_TRUST * t)
@@ -273,12 +463,35 @@ def recall(
             * (1 + W_SETTLED * settled)
             * (1 + W_AFFINITY * aff)
             * (1 + W_ENTITY * ent_signal)
+            * (1 + W_LEXICAL * lex_norm)
+            * (1 + W_REF * ref_match)
         )
+        if scaffold:
+            score *= SCAFFOLD_PENALTY
         hits.append(
             Hit(str(cid), content, kind, trust, ts, ref, source,
-                float(cosine), score, int(nsup or 0), entity_hit=bool(matched))
+                float(cosine), score, int(nsup or 0), entity_hit=bool(matched),
+                lex=lex_norm, scaffold=scaffold)
         )
     hits.sort(key=lambda h: -h.score)
     for h in hits:
         h.intent = intent
-    return hits[:k]
+    result = _collapse_near_dups(hits, k)
+
+    # Cosine-leader guarantee. Standing signals are tie-breakers, but multiplied
+    # together they can bury the most similar claim entirely — a linked cos-0.69
+    # claim outscoring an unlinked cos-0.83 one (q017, 2026-08-21) turns
+    # tie-breakers into a veto. So the two most question-similar claims always
+    # make the cut; standing still decides the order of everything above them.
+    leaders = [h for h in sorted(hits, key=lambda h: -h.cosine) if not h.scaffold][:2]
+    for lead in leaders:
+        if lead in result or any(_near_dup(lead.content, p.content) for p in result):
+            continue
+        if len(result) < k:
+            result.append(lead)
+        else:
+            for i in range(len(result) - 1, -1, -1):
+                if result[i] not in leaders:
+                    result[i] = lead
+                    break
+    return result
