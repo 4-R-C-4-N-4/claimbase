@@ -18,6 +18,16 @@ from .llm import call_llm
 
 EXTRACTOR_VERSION = "teacher-27b-v2"
 
+# The current local teacher — the single place the model is named. guru's serving
+# convention (docs/ingest/10-tag-concepts.md): Qwen3.8 is the current 27B teacher,
+# served by guru/scripts/run-qwen3.8-tagger.sh (or `llm qwen3.8`). The identifier
+# is provenance — it is stamped into extractor_runs.model — so it must name the
+# file the server actually loads. EXTRACTOR_VERSION is the prompt version and
+# stays put on a model swap: the skip check keys on it, so a swap extracts only
+# new events. A full re-extraction under the new teacher is a deliberate,
+# hours-of-GPU decision made by bumping EXTRACTOR_VERSION, not a side effect.
+TEACHER_MODEL = "Qwen3.8-27B-UD-Q4_K_XL.gguf"
+
 # The kind definitions the graph actually acts on. Written as consequences rather
 # than dictionary glosses, because the model's job is to pick the label that makes
 # supersession behave correctly (§4.5), not to classify prose in the abstract.
@@ -63,6 +73,22 @@ VALID_KINDS = {
 _ARRAY = re.compile(r"\[.*\]", re.S)
 
 
+def parsed_ok(raw: str) -> bool:
+    """Did the response contain a well-formed JSON array at all? Distinct from
+    `parse(raw) == []`, which is also what a legitimate empty extraction looks
+    like. Progress marking keys on this, so an unparseable response is retried
+    rather than recorded as 'read, empty' (the silent-gap failure guru's node 10
+    documents)."""
+    m = _ARRAY.search(raw or "")
+    if not m:
+        return False
+    try:
+        json.loads(m.group(0))
+        return True
+    except json.JSONDecodeError:
+        return False
+
+
 def parse(raw: str) -> list[Extracted]:
     """Tolerant parse. A malformed response yields nothing rather than garbage —
     an unparseable answer and a wrong answer must not be confusable."""
@@ -92,7 +118,7 @@ def parse(raw: str) -> list[Extracted]:
 def extract(
     passage: str,
     *,
-    model: str = "Qwen3.5-27B-UD-Q4_K_XL.gguf",
+    model: str = TEACHER_MODEL,
     provider: str = "llamacpp",
     max_tokens: int = 8192,
     timeout: float = 600.0,
