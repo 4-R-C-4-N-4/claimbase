@@ -22,7 +22,7 @@ HARNESSES = ROOT / "harnesses"
 # Commands that can destroy work. Extraction costs hours of GPU; entities and
 # links cost seconds. Anything that deletes or rewrites claims takes a snapshot
 # first, because both times claims were lost it was a command that looked routine.
-DESTRUCTIVE = {"import", "entities", "link", "supersede", "resolve"}
+DESTRUCTIVE = {"import", "entities", "link", "supersede", "resolve", "compile"}
 
 
 def auto_backup(label: str) -> None:
@@ -332,6 +332,163 @@ def cmd_link(args: argparse.Namespace) -> int:
     return 0
 
 
+def _extraction_pending(conn, corpus: str) -> int:
+    """How many prose events the current extractor version has not read. Uses
+    extract_run's own selection, so status and the run can never disagree about
+    what 'pending' means."""
+    from .extract_run import pending_events
+
+    return len(pending_events(conn, corpus))
+
+
+def _teacher_up() -> bool:
+    import urllib.request
+
+    from .llm import LLAMACPP_BASE_URL
+
+    try:
+        with urllib.request.urlopen(f"{LLAMACPP_BASE_URL}/health", timeout=3) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    """Where the compiled corpus stands relative to its sources, and what to run.
+
+    The guru driver-loop pattern (guru docs/ingest/README.md): status reads the
+    store and the sources directly, so it reports the truth about the corpus
+    rather than the truth about what someone remembers doing. This is also the
+    go/no-go a future cron checks before and after a `compile`.
+    """
+    import subprocess
+    from datetime import datetime, timezone
+
+    spec = load_corpus(args.corpus)
+    conn = connect()
+    stale = False
+
+    print(f"  corpus {spec['name']} — compiled state vs sources\n")
+    with conn.cursor() as cur:
+        # Repos: the latest commit is the freshness frontier for every adapter
+        # reading that repo (git_log refs are `<repo>@<sha>`).
+        for s in (x for x in spec["source"] if x["kind"] == "repo"):
+            cur.execute(
+                """SELECT max(captured_at) FROM events
+                   WHERE corpus=%s AND source='git_log' AND source_ref LIKE %s""",
+                (spec["name"], f"{s['name']}@%"),
+            )
+            have = cur.fetchone()[0]
+            r = subprocess.run(
+                ["git", "-C", str(s["resolved"]), "log", "-1", "--format=%cI"],
+                capture_output=True, text=True,
+            )
+            head = datetime.fromisoformat(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else None
+            lag = ""
+            if have and head:
+                behind = (head - have).days
+                if behind > 0:
+                    n = subprocess.run(
+                        ["git", "-C", str(s["resolved"]), "rev-list", "--count",
+                         f"--since={have.isoformat()}", "HEAD"],
+                        capture_output=True, text=True,
+                    ).stdout.strip()
+                    lag = f"  [{behind}d behind, ~{n} commits]"
+                    stale = True
+            print(f"    {s['name']:<14} compiled to {have:%Y-%m-%d} · HEAD {head:%Y-%m-%d}{lag}"
+                  if have and head else f"    {s['name']:<14} never imported")
+
+        # Memory sources: newest fact file vs newest compiled event.
+        for s in (x for x in spec["source"] if x["kind"] == "agent_memory"):
+            root = Path(f"~/.claude/projects/{s['scope']}/memory").expanduser()
+            files = [p for p in root.glob("*.md") if p.name != "MEMORY.md"] if root.exists() else []
+            newest = max((f.stat().st_mtime for f in files), default=None)
+            cur.execute(
+                # `:{scope}/` not `%{scope}%`: -Work-guru is a prefix of
+                # -Work-guru-web, so a substring match crosses scopes.
+                "SELECT max(captured_at) FROM events WHERE corpus=%s AND source='agent_memory' AND source_ref LIKE %s",
+                (spec["name"], f"%:{s['scope']}/%"),
+            )
+            have = cur.fetchone()[0]
+            if newest and have:
+                newest_dt = datetime.fromtimestamp(newest, tz=timezone.utc)
+                mark = ""
+                if newest_dt.date() > have.date():
+                    mark = f"  [files newer: {newest_dt:%Y-%m-%d}]"
+                    stale = True
+                print(f"    {s['name']:<14} compiled to {have:%Y-%m-%d}{mark}")
+
+        pending = _extraction_pending(conn, spec["name"])
+        cur.execute("SELECT count(*) FROM claims WHERE corpus=%s AND embedding IS NULL", (spec["name"],))
+        unembedded = cur.fetchone()[0]
+        cur.execute("SELECT count(*) FROM conflicts WHERE corpus=%s AND resolution IS NULL", (spec["name"],))
+        open_conflicts = cur.fetchone()[0]
+        cur.execute("SELECT count(*) FROM claims_review WHERE corpus=%s", (spec["name"],))
+        review = cur.fetchone()[0]
+    conn.close()
+
+    print(f"\n    prose events awaiting extraction   {pending:>6}"
+          f"   (teacher {'up' if _teacher_up() else 'DOWN — extraction will be skipped'})")
+    print(f"    claims without embedding           {unembedded:>6}")
+    print(f"    open conflicts                     {open_conflicts:>6}")
+    print(f"    claims_review backlog              {review:>6}")
+
+    if stale or pending or unembedded:
+        print("\n  next: python -m claimbase compile")
+    else:
+        print("\n  compiled state is current; nothing to do")
+    return 0
+
+
+def cmd_extract(args: argparse.Namespace) -> int:
+    from .extract_run import main as extract_main
+
+    if not _teacher_up():
+        print("  no llama.cpp server at :8080 — start the teacher first "
+              "(guru/scripts/run-qwen3.8-tagger.sh or `llm qwen3.8`)")
+        return 1
+    argv = ["--corpus", args.corpus]
+    if args.limit:
+        argv += ["--limit", str(args.limit)]
+    extract_main(argv)
+    return 0
+
+
+def cmd_compile(args: argparse.Namespace) -> int:
+    """The whole engine, in order, incremental at every step: import → extract →
+    embed → supersede → resolve. One snapshot up front covers the run. This is
+    the command a cron will eventually call; until then it is the command a
+    human calls when `status` says the corpus is behind.
+
+    Extraction is the only step with an external dependency (the teacher
+    server). When it is down the compile still runs — a corpus current on
+    structured claims but behind on prose is strictly better than one behind on
+    both — but says so loudly, because silence here is how a corpus quietly
+    becomes extraction-stale.
+    """
+    steps: list[tuple[str, object]] = [("import", cmd_import)]
+    if _teacher_up():
+        steps.append(("extract", cmd_extract))
+    else:
+        print("  NOTE: teacher server down — skipping extraction. Prose events will")
+        print("        accumulate; `status` counts them. Start the server and re-run.")
+    # entities/link sit between embed and supersede: the entity signal is what
+    # cut mislead-rate 0.273 → 0.091 (findings 2026-08-12), and it only covers
+    # claims that have been linked — a compile that skipped them would leave
+    # every new claim invisible to that ranking leg.
+    steps += [("embed", cmd_embed), ("entities", cmd_entities), ("link", cmd_link),
+              ("supersede", cmd_supersede), ("resolve", cmd_resolve)]
+
+    for name, fn in steps:
+        print(f"\n== {name}")
+        rc = fn(args)
+        if rc:
+            print(f"  {name} failed (rc={rc}); stopping here — later steps read its output")
+            return rc
+    print("\n== status")
+    return cmd_status(args)
+
+
 def cmd_stats(args: argparse.Namespace) -> int:
     with connect() as conn:
         s = Store(conn).stats(args.corpus)
@@ -387,6 +544,16 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("link", help="link claims to the entities they mention")
     p.add_argument("--corpus", default="guru")
     p.set_defaults(fn=cmd_link)
+    p = sub.add_parser("status", help="compiled state vs sources; what to run next")
+    p.add_argument("--corpus", default="guru")
+    p.set_defaults(fn=cmd_status)
+    p = sub.add_parser("extract", help="run the teacher over pending prose events")
+    p.add_argument("--corpus", default="guru")
+    p.add_argument("--limit", type=int, default=0, help="0 = all pending")
+    p.set_defaults(fn=cmd_extract)
+    p = sub.add_parser("compile", help="import → extract → embed → supersede → resolve")
+    p.add_argument("--corpus", default="guru")
+    p.set_defaults(fn=cmd_compile, dry_run=False, limit=0)
     p = sub.add_parser("stats", help="what is in the store")
     p.add_argument("--corpus", default="guru")
     p.set_defaults(fn=cmd_stats)

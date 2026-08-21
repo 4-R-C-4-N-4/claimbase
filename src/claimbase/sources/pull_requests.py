@@ -40,24 +40,36 @@ class PullRequests:
         self.cache = cache
         self.skipped: dict[str, str] = {}
 
+    # A day: PRs merge at human cadence, and the point of the cache is to spare
+    # gh on back-to-back runs, not to freeze the source. Before this expiry the
+    # cache was forever — it sat at 2026-08-07 while PRs kept merging, and the
+    # import reported "0 new" as if that were a fact about the repos.
+    CACHE_MAX_AGE_S = 86400.0
+
     def _fetch(self, repo: str) -> list[dict]:
-        """`gh` is a network call, so results are cached. An offline run degrades to
-        contributing nothing rather than failing the whole import."""
-        if self.cache:
-            f = self.cache / f"prs-{repo}.json"
-            if f.exists():
-                return json.loads(f.read_text())
+        """`gh` is a network call, so results are cached with an expiry. An
+        offline run degrades to the stale cache (stale beats absent), and to
+        contributing nothing only when there is no cache at all."""
+        import time
+
+        f = self.cache / f"prs-{repo}.json" if self.cache else None
+        if f and f.exists() and (time.time() - f.stat().st_mtime) < self.CACHE_MAX_AGE_S:
+            return json.loads(f.read_text())
         out = subprocess.run(
             ["gh", "pr", "list", "--state", "all", "--limit", "500", "--json", FIELDS],
             cwd=self.repos[repo],
             capture_output=True,
             text=True,
         )
-        data = json.loads(out.stdout) if out.stdout.strip() else []
-        if self.cache:
-            self.cache.mkdir(parents=True, exist_ok=True)
-            (self.cache / f"prs-{repo}.json").write_text(json.dumps(data))
-        return data
+        if out.returncode == 0 and out.stdout.strip():
+            data = json.loads(out.stdout)
+            if self.cache:
+                self.cache.mkdir(parents=True, exist_ok=True)
+                (self.cache / f"prs-{repo}.json").write_text(json.dumps(data))
+            return data
+        if f and f.exists():
+            return json.loads(f.read_text())
+        return []
 
     def scan(self) -> Iterator[object]:
         for repo in self.repos:

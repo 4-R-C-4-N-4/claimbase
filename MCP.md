@@ -17,6 +17,15 @@ The MCP server exposes the claim graph over stdio. Add to your Claude Code MCP c
 Requires the database up (`docker compose up -d`) and Ollama running for query
 embedding. Nothing else — the model server is only needed for extraction.
 
+## Using claimbase from hermes
+
+Hermes has a native MCP client; the same server is declared in
+`~/.hermes/config.yaml` under `mcp_servers:` (added 2026-08-21) and its tools
+appear to every hermes agent as `mcp_claimbase_recall`, `mcp_claimbase_timeline`,
+`mcp_claimbase_conflicts`, `mcp_claimbase_stats` after a gateway restart. The
+same write posture applies: `assert_claim` stays unregistered unless that config
+block passes `CLAIMBASE_MCP_WRITE: "1"`.
+
 ## Blast radius
 
 Read-only by default, and the read is enforced by the database rather than by the
