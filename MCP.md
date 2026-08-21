@@ -8,7 +8,8 @@ The MCP server exposes the claim graph over stdio. Add to your Claude Code MCP c
     "claimbase": {
       "command": "/home/ivy/Work/claimbase/.venv/bin/python",
       "args": ["-m", "claimbase.mcp_server"],
-      "env": { "PYTHONPATH": "/home/ivy/Work/claimbase/src" }
+      "env": { "PYTHONPATH": "/home/ivy/Work/claimbase/src",
+               "CLAIMBASE_CLIENT": "claude" }
     }
   }
 }
@@ -73,6 +74,20 @@ Keeping writes off breaks that chain, which is why the default is what it is.
 | `conflicts()` | Contradictions the compiler could not settle. Empty is the normal state. |
 | `assert_claim(text, kind)` | Capture something the corpus does not record. |
 | `stats()` | What the corpus contains. |
+
+## Query log
+
+Every tool call — arguments, latency, and the full response the agent saw (or
+the error) — is appended to `logs/mcp-queries.jsonl`. This is testing data:
+real agent queries are the gold-set source that harvesting could not supply,
+and a miss is only gradeable later because the log keeps what was returned at
+the moment of asking, not a pointer into a graph that has since moved.
+
+- `CLAIMBASE_QUERY_LOG` overrides the path; set empty to disable (tests do).
+- `CLAIMBASE_CLIENT` names the harness per config entry (`hermes`, `claude`),
+  so per-client question distributions stay separable.
+- It is a file, not a table, so the read-only DB role keeps its guarantee.
+- Logging failures go to stderr and never fail the call.
 
 ## Two properties worth knowing when reading results
 

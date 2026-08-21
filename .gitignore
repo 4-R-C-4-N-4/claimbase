@@ -6,3 +6,4 @@ eval/extract.log
 eval/results-bakeoff/
 eval/results-*.json
 eval/decisions.jsonl
+logs/
