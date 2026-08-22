@@ -353,6 +353,47 @@ def _teacher_up() -> bool:
         return False
 
 
+def _teacher_busy() -> str | None:
+    """Someone else's name for the GPU, or None if extraction may use it.
+
+    The teacher shares one llama.cpp slot with the guru pipeline's own long runs
+    (overnight tagging, dossier generation). Extraction queueing onto that slot
+    would interleave with — and roughly double the wall-clock of — a run the
+    owner deliberately started, so a busy GPU defers extraction to the next
+    compile rather than competing. Two signals, either one is enough:
+
+    - a known pipeline driver process is alive (the reliable signal — a cron
+      firing between two batches of a tagging run sees an idle slot and would
+      wrongly conclude the GPU is free), or
+    - the server reports requests in flight right now (catches drivers this
+      list doesn't know about).
+    """
+    import subprocess
+    import urllib.request
+
+    from .llm import LLAMACPP_BASE_URL
+
+    # Match actual script invocations (scripts/<driver>.py), not any command
+    # line that merely mentions a driver name — a shell or editor talking
+    # *about* tag_concepts must not read as a tagging run. pgrep never reports
+    # itself, so no self-exclusion trick is needed.
+    probe = subprocess.run(
+        ["pgrep", "-af",
+         r"scripts/(tag_concepts|build_dossiers|review_dossiers|embed_corpus)\.py"],
+        capture_output=True, text=True,
+    )
+    if probe.stdout.strip():
+        return probe.stdout.strip().splitlines()[0]
+    try:
+        with urllib.request.urlopen(f"{LLAMACPP_BASE_URL}/metrics", timeout=3) as r:
+            for line in r.read().decode().splitlines():
+                if line.startswith("llamacpp:requests_processing") and float(line.split()[-1]) > 0:
+                    return "llama.cpp reports requests in flight"
+    except Exception:
+        pass  # no metrics endpoint — the pgrep check above is the real gate
+    return None
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     """Where the compiled corpus stands relative to its sources, and what to run.
 
@@ -467,7 +508,15 @@ def cmd_compile(args: argparse.Namespace) -> int:
     becomes extraction-stale.
     """
     steps: list[tuple[str, object]] = [("import", cmd_import)]
-    if _teacher_up():
+    busy = _teacher_busy() if _teacher_up() else None
+    if busy:
+        # An unattended compile must never queue teacher calls onto a slot a
+        # deliberate long run is using (an overnight tagging run, a dossier
+        # campaign). Prose extraction defers to the next compile; everything
+        # CPU-side still runs, same trade as the teacher-down case.
+        print(f"  NOTE: GPU busy ({busy}) — skipping extraction so the running")
+        print("        job keeps its slot. Prose events accumulate; `status` counts them.")
+    elif _teacher_up():
         steps.append(("extract", cmd_extract))
     else:
         print("  NOTE: teacher server down — skipping extraction. Prose events will")
