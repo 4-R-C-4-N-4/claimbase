@@ -259,9 +259,15 @@ def test_reimport_must_not_destroy_extracted_claims() -> None:
     assert "extractor_version" in src, (
         "replace_claims must exclude extractor-derived claims from its delete"
     )
-    # Both the delete and the supersession-revert need the guard; the revert reaches
-    # claims by the same event_id and would strand extracted ones.
-    assert src.count("extractor_version") >= 2
+    # The delete and the supersession-revert used to carry the guard separately,
+    # and this test counted two occurrences. Both now act only on an explicit
+    # id list selected through the guard once, so there is nothing unscoped left
+    # to count — the delete must never again be keyed on the event.
+    assert "DELETE FROM claims WHERE event_id" not in src, (
+        "replace_claims must delete by the guarded id list, never by event"
+    )
+    # The behaviour itself is asserted against a real database in
+    # tests/test_memory_reads.py::TestStableIds.
 
 
 def test_entity_reset_cannot_reach_claims() -> None:
