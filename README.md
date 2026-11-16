@@ -88,6 +88,10 @@ Extraction needs a local model server; everything else needs Postgres and Ollama
 Corpora are declared in [`corpora/*.toml`](corpora/) — named, and never derived from
 the working directory.
 
+The memory layer — session ingest, memory PRs, usage measures — is specified in
+**[GOALS.md](GOALS.md)** and tested against a scratch database
+(`scripts/test_db.sh up`), never the live one.
+
 For agent access see **[MCP.md](MCP.md)**. Read-only by default; writes are opt-in,
 because a false claim written to the graph misleads every later session.
 

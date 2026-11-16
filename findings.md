@@ -749,3 +749,103 @@ depth, not ranking, and a targeted re-extract of the readability-gate doc is the
 fix. And the recall weights have now been adjusted while watching this larger
 scoreboard — 27 questions is better than eight, but the docstring's honesty
 clause still applies.
+
+
+---
+
+## 2026-11-16 — Twelve weeks of silence, and what trigger selection found
+
+Written while starting the memory-layer branch (GOALS.md). Two things were
+measured before any of it was built; neither is a scoreboard.
+
+### Nobody has asked the store anything since August
+
+`claimbase-db` exited two months ago and was never restarted. The query log
+holds 75 calls in total: 73 on 2026-08-21 (the reviewer eval above) and 2 on
+2026-08-26. The nightly compile has not run either: the crontab entry is
+there, no cron daemon is active on this machine, and `logs/cron-compile.log`
+was never created.
+
+Why the silence, checked against the harnesses' own records rather than
+guessed:
+
+| harness | wired | told to ask | claimbase calls, ever | sessions since 2026-08-26 |
+|---|---|---|---|---|
+| hermes `reviewer` | yes | yes — SOUL.md: "ask the compiled memory first" | 224 tool messages | 0 (last 2026-08-21) |
+| hermes `guru-dev` | yes | yes, same section | 4 | 3, all on 2026-08-26 |
+| hermes `driver` | yes | no | 0 | 0 (last 2026-08-20) |
+| hermes default profile | yes (root `config.yaml`) | no | **0** | **192** |
+| Claude Code | no | — | 0 | daily |
+
+Two things are visible, and they are separate.
+
+**Wired and told to ask, an agent asks.** The reviewer did, 224 times. **Wired
+and not told, it never does**: the default profile has had the tool available
+for 192 sessions since August and has not called it once. (Of the 21 recent
+default sessions that record their tool list, none lists a claimbase tool;
+whether the server fails to load there was not checked, so "available" may be
+generous.) Retrieval quality cannot matter to a caller that does not call.
+
+**And the callers that did ask stopped running.** The work moved to the
+default profile and to Claude Code; the store's absence went unnoticed because
+nothing still in use depended on it. Memory was attached to five profiles
+instead of to the work — the RFC's own motivation, demonstrated on its
+predecessor.
+
+That shapes the branch. `brief` is one call at session start that asks nothing
+of the agent's judgment, so an unprompted agent still gets memory; projects
+resolve from the working directory, so wiring is per harness and not per
+profile; and `usage report` opens with an activity line that reads zero when
+zero is the truth.
+
+One gap in the log itself: responses carried no claim ids, so it could say what
+was asked and never which claims were used. Fixed going forward; the 75
+historical lines are matched to claims by exact text where the claim still
+exists.
+
+### Selection, run over 145 real hermes sessions (no model)
+
+`sessions.segment` over the 145 most recent hermes sessions with at least two
+user messages — 50,698 turns. Three passes:
+
+| pass | user-role turns | corrections | decisions | tool failures |
+|---|---|---|---|---|
+| first rules | 1,460 | 105 | 65 | 191 |
+| harness notices removed | 1,054 | 36 | 31 | 191 |
+| two rules tightened | 1,054 | 30 | 17 | 191 |
+
+**406 of 1,460 "user" turns were not the user** (28%). Hermes writes bracketed
+notices into the user role — `[ASYNC DELEGATION BATCH COMPLETE …]`,
+`[CONTEXT COMPACTION — REFERENCE ONLY]`, `[System: …]` — and a subagent's report
+is dense with "don't" and "instead". They accounted for 69 of the first 105
+corrections. This matters past selection noise: a user turn is the one kind of
+evidence allowed to back a PR that merges against a human claim, so text the
+harness put in that role would have carried human authority. Role attribution
+is now structural *and* filtered, and the filter is a test.
+
+**Tool failures outnumber every user trigger four to one**, and read as
+transient (a build error, a missing path). Judging each would spend most of the
+model budget on the lowest-value trigger. A failure is now judged only when it
+is similar to something the store holds — the RFC's own wording, "implicates a
+claim the agent acted on" — and otherwise recorded as an episode and left.
+The threshold (cosine 0.6) is a guess.
+
+**The remaining triggers are sparse: 47 across 145 sessions.** One in three
+sessions has a correction or a decision at all. Need-driven collection will be
+slow to fill a store, by design; whether it fills it with better claims than
+extraction did is the question `yield per trigger` exists to answer, and it
+cannot be answered until sessions are submitted and a judge has run.
+
+### Not measured
+
+- **The judge.** Its prompt has run only against a scripted stand-in. Durable
+  rate per rule, and whether its claims are self-contained, are unknown.
+- **Every threshold in `writer.py`** — duplicate 0.92, promote 0.86, failure
+  0.6, use-overlap 0.5. Chosen by argument. `claimbase replay` is the
+  instrument for tuning them.
+- **Correction recall.** The selector's precision was read by eye from samples;
+  what it misses was not looked at.
+- **Stable claim ids against the real corpus.** The import path now keeps
+  unchanged claims in place (GOALS decision 11). Tested on a scratch database,
+  not on the 11.6k-claim store, which was down.
+
