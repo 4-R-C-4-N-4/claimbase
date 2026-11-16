@@ -1,9 +1,10 @@
 __pycache__/
 *.pyc
-.venv/
+.venv
 eval/.cache/
 eval/extract.log
 eval/results-bakeoff/
 eval/results-*.json
 eval/decisions.jsonl
 logs/
+spool/

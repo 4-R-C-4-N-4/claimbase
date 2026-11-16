@@ -119,16 +119,17 @@ W_REF = 0.7
 NEAR_DUP_JACCARD = 0.6
 HALF_LIFE_DAYS = 120.0
 
-_ALIAS_CACHE: dict | None = None
+# Per project: entities are namespaced by corpus, and two projects can each
+# have an "auth service" without the system ever comparing them.
+_ALIAS_CACHE: dict[str, dict] = {}
 
 
-def _alias_map(conn) -> dict:
-    global _ALIAS_CACHE
-    if _ALIAS_CACHE is None:
+def _alias_map(conn, corpus: str = "guru") -> dict:
+    if corpus not in _ALIAS_CACHE:
         from .link_entities import build_alias_map
 
-        _ALIAS_CACHE = build_alias_map(conn)
-    return _ALIAS_CACHE
+        _ALIAS_CACHE[corpus] = build_alias_map(conn, corpus)
+    return _ALIAS_CACHE[corpus]
 
 # --- question intent ---------------------------------------------------------
 #
@@ -212,6 +213,9 @@ class Hit:
     entity_hit: bool = False
     lex: float = 0.0
     scaffold: bool = False
+    # `contested` is served, with its label: a claim under dispute is still the
+    # best the store has, and hiding it would turn a dispute into a silence.
+    status: str = "active"
 
     def why(self) -> str:
         """Ranking has to be explainable, or an epistemic claim graph is just a
@@ -227,6 +231,8 @@ class Hit:
             bits.append(f"lex {self.lex:.2f}")
         if self.scaffold:
             bits.append("scaffold")
+        if self.status != "active":
+            bits.append(self.status.upper())
         return " · ".join(bits)
 
 
@@ -302,7 +308,10 @@ def recall(
 
     now = as_of or datetime.now(timezone.utc)
     vec = _embed_one(query)
-    where = "" if include_superseded else "AND c.status = 'active'"
+    # Standing claims: active, plus contested (served with a label). Tentative
+    # claims rest on one episode and are not served until a second supports
+    # them; superseded ones only on request.
+    where = "" if include_superseded else "AND c.status IN ('active', 'contested')"
     asof = "AND (c.asserted_at IS NULL OR c.asserted_at <= %(now)s)" if as_of else ""
 
     with conn.cursor() as cur:
@@ -312,7 +321,7 @@ def recall(
                    e.source_ref, e.source,
                    1 - (c.embedding <=> %(v)s::vector) AS cosine,
                    (SELECT count(*) FROM claims s WHERE s.superseded_by = c.id),
-                   c.meta, 0.0 AS lex
+                   c.meta, 0.0 AS lex, c.status
             FROM claims c JOIN events e ON e.id = c.event_id
             WHERE c.corpus = %(corpus)s AND c.embedding IS NOT NULL {where} {asof}
             ORDER BY c.embedding <=> %(v)s::vector
@@ -347,7 +356,7 @@ def recall(
                        e.source_ref, e.source,
                        1 - (c.embedding <=> %(v)s::vector) AS cosine,
                        (SELECT count(*) FROM claims s WHERE s.superseded_by = c.id),
-                       c.meta, ts_rank_cd(c.content_tsv, q.tsq, 1) AS lex
+                       c.meta, ts_rank_cd(c.content_tsv, q.tsq, 1) AS lex, c.status
                 FROM claims c JOIN events e ON e.id = c.event_id, q
                 WHERE c.corpus = %(corpus)s AND c.embedding IS NOT NULL
                   AND c.content_tsv @@ q.tsq {where} {asof}
@@ -378,7 +387,7 @@ def recall(
                            e.source_ref, e.source,
                            1 - (c.embedding <=> %(v)s::vector) AS cosine,
                            (SELECT count(*) FROM claims s WHERE s.superseded_by = c.id),
-                           c.meta, 0.0 AS lex
+                           c.meta, 0.0 AS lex, c.status
                     FROM claims c JOIN events e ON e.id = c.event_id
                     WHERE c.corpus = %(corpus)s AND c.embedding IS NOT NULL
                       AND lower(e.source_ref) LIKE ANY(%(pats)s) {where} {asof}
@@ -411,7 +420,7 @@ def recall(
 
     from .link_entities import entities_in, repos_in
 
-    q_entities = entities_in(query, _alias_map(conn))
+    q_entities = entities_in(query, _alias_map(conn, corpus))
     q_repos = repos_in(query)
     claim_ents: dict[str, set[str]] = {}
     claim_repos: dict[str, set[str]] = {}
@@ -438,7 +447,7 @@ def recall(
                 hit_counts[repo] = hit_counts.get(repo, 0) + 1
 
     hits = []
-    for cid, content, kind, trust, ts, ref, source, cosine, nsup, meta, lex in rows:
+    for cid, content, kind, trust, ts, ref, source, cosine, nsup, meta, lex, status in rows:
         t = TRUST_WEIGHT.get(trust, 0.0)
         cur_ = _currency(kind, ts, now) * currency_scale
         settled = min(int(nsup or 0), 4) / 4.0
@@ -471,7 +480,7 @@ def recall(
         hits.append(
             Hit(str(cid), content, kind, trust, ts, ref, source,
                 float(cosine), score, int(nsup or 0), entity_hit=bool(matched),
-                lex=lex_norm, scaffold=scaffold)
+                lex=lex_norm, scaffold=scaffold, status=status)
         )
     hits.sort(key=lambda h: -h.score)
     for h in hits:

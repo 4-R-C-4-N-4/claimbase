@@ -137,9 +137,8 @@ def cmd_import(args: argparse.Namespace) -> int:
 
 def rebuild_captured(store, conn, corpus: str) -> int:
     """Recreate claims for `assert` events that have none."""
-    import uuid as _uuid
-
     from .core.models import Kind, Trust
+    from .core.store import stable_claim_id
 
     made = 0
     with conn.cursor() as cur:
@@ -161,7 +160,8 @@ def rebuild_captured(store, conn, corpus: str) -> int:
                 """INSERT INTO claims (id, corpus, event_id, content, claim_kind, trust,
                        corroborated, asserted_at, valid_from, confidence, status, meta)
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'active',%s)""",
-                (_uuid.uuid4(), corpus, eid, content, str(kind), str(trust),
+                (stable_claim_id(eid, str(kind), content), corpus, eid, content,
+                 str(kind), str(trust),
                  not via_mcp, ts, ts, 1.0 if not via_mcp else 0.7,
                  json.dumps({"asserted": True, "rebuilt": True, **meta})),
             )
@@ -228,10 +228,10 @@ def cmd_assert(args: argparse.Namespace) -> int:
     everything else goes through, so an asserted fact carries provenance and a
     timestamp exactly like an imported one.
     """
-    import uuid
     from datetime import datetime, timezone
 
     from .core.models import Event, Kind, Trust
+    from .core.store import stable_claim_id
 
     ev = Event(
         source="assert",
@@ -248,8 +248,10 @@ def cmd_assert(args: argparse.Namespace) -> int:
         cur.execute(
             """INSERT INTO claims (id, corpus, event_id, content, claim_kind, trust,
                    corroborated, asserted_at, valid_from, confidence, status, meta)
-               VALUES (%s,%s,%s,%s,%s,%s,true,%s,%s,1.0,'active',%s)""",
-            (uuid.uuid4(), args.corpus, eid, args.text, args.kind,
+               VALUES (%s,%s,%s,%s,%s,%s,true,%s,%s,1.0,'active',%s)
+               ON CONFLICT (id) DO NOTHING""",
+            (stable_claim_id(eid, args.kind, args.text), args.corpus, eid, args.text,
+             args.kind,
              # A human said it directly: the highest trust tier in the system, and
              # the only path by which one enters other than a measurement artifact.
              str(Trust.HUMAN), ev.captured_at, ev.captured_at,
@@ -611,6 +613,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--port", type=int, default=8760)
     p.add_argument("--limit", type=int, default=60)
     p.set_defaults(fn=cmd_review)
+
+    # The memory layer (GOALS.md): brief, inspect, submit-session, writer,
+    # replay, pr, usage, report.
+    from .memory_cli import register
+
+    register(sub)
     args = ap.parse_args(argv)
     if args.cmd in DESTRUCTIVE and not getattr(args, "dry_run", False) and not args.no_backup:
         auto_backup(f"pre-{args.cmd}")
