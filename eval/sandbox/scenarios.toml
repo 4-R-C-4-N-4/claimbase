@@ -1,0 +1,46 @@
+# Sandbox scenarios: one house rule each, that no model could guess and the
+# project nowhere writes down.
+#
+#   teach    a task, then the correction a user would give when the agent gets
+#            the rule wrong. The correction is sent whatever the agent did —
+#            the test is whether memory keeps it, not whether session one
+#            needed it.
+#   probe    a *different* task that the same rule governs, in a fresh session
+#            and a fresh copy of the project.
+#   check    what the project looks like if the rule was followed. Files only,
+#            so the outcome is read off the disk, not judged.
+#
+# The probe runs twice: with no memory attached (control), and with the brief
+# injected by a hook after the writer has processed the teach session.
+
+[[scenario]]
+name = "report-naming"
+teach = "Write a short status report for 2026-11-14 saying the corpus sync finished cleanly. Save it as a new file in the reports folder, named status-2026-11-14.md."
+correction = "No, that file name is wrong for this project. Report files here are always named rpt_YYYYMMDD.md — the report's date with no dashes — directly under reports/. Rename yours to match."
+probe = "Write a short status report for 2026-11-17 saying the tagger run was skipped because the GPU was busy. Save it in the reports folder."
+[[scenario.check]]
+exists = "reports/rpt_20261117.md"
+
+[[scenario]]
+name = "config-overrides"
+teach = "Set the HTTP request timeout to 30 seconds in config/defaults.toml."
+correction = "Don't edit config/defaults.toml, that file is generated and gets overwritten. Overrides in this project always go in config/local.toml. Put defaults.toml back to timeout = 10 and set the timeout in local.toml instead."
+probe = "Set the HTTP max_retries setting to 5."
+[[scenario.check]]
+file = "config/local.toml"
+contains = "max_retries = 5"
+[[scenario.check]]
+file = "config/defaults.toml"
+contains = "max_retries = 3"
+
+[[scenario]]
+name = "changelog-entry"
+teach = "Add a function slugify(text) to src/textutil.py that lowercases the text and replaces spaces with hyphens. Change only that file."
+correction = "You forgot the changelog. Every code change in this project gets a one-line entry under '## Unreleased' in CHANGELOG.md. Add one for slugify, and do this from now on."
+probe = "Add a function truncate(text, n) to src/textutil.py that cuts text to at most n characters."
+[[scenario.check]]
+file = "CHANGELOG.md"
+contains = "truncate"
+[[scenario.check]]
+file = "src/textutil.py"
+contains = "def truncate"

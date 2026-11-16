@@ -298,3 +298,26 @@ class TestParseVerdict:
     def test_no_json_raises(self):
         with pytest.raises(ValueError):
             writer.parse_verdict("no idea", 0)
+
+
+def test_a_hook_injected_brief_is_attributed_through_the_query_log(db, embed, tmp_path):
+    """A harness hook puts the brief in front of the model without a tool call,
+    so the transcript holds no claimbase result. The log does."""
+    cid = seed_claim(db, "Report files are named rpt_YYYYMMDD.md under reports/.")
+    log = tmp_path / "q.jsonl"
+    log.write_text(json.dumps({
+        "ts": T0, "client": "hermes-sandbox", "session": "h-77", "project": "guru",
+        "tool": "brief", "args": {},
+        "response": {"claims": [{"id": cid, "claim": "Report files are named "
+                                 "rpt_YYYYMMDD.md under reports/."}]}}) + "\n")
+    usage.sync(db, log)
+    s = Session("hermes", "h-77", [
+        Turn("user", "write up today's numbers", ts=T0),
+        Turn("tool_call", "", tool="write_file",
+             args={"path": "reports/rpt_20261116.md", "content": "…"}, ts=T0),
+        Turn("assistant", "Saved the report as reports/rpt_20261116.md, named per the "
+             "rpt_YYYYMMDD.md convention for report files.", ts=T0)],
+        project="guru", started_at=T0, ended_at=T0)
+    assert writer.ingest(db, s)["used"] == 1
+    db.commit()
+    assert usage.measures(db, "guru")["dead_weight"]["never_retrieved"] == 0

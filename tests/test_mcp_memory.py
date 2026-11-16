@@ -208,3 +208,47 @@ def test_the_harness_contract_over_stdio(db, tmp_path):
     assert [l["tool"] for l in log] == ["brief", "inspect", "feedback", "submit_session"]
     assert {l["session"] for l in log} == {"wire-1"}
     assert len(list((tmp_path / "spool" / "inbox").iterdir())) == 1
+
+
+# --- harness hooks -----------------------------------------------------------
+
+
+def _hook(monkeypatch, capsys, payload, *argv):
+    import io
+    import sys
+
+    from claimbase import cli
+
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(payload) if payload else ""))
+    assert cli.main(["--no-backup", "hook", "brief", *argv]) == 0, "a hook never fails"
+    return capsys.readouterr().out.strip()
+
+
+def test_brief_hook_injects_once_and_logs_under_the_harness_session(
+        server, db, monkeypatch, capsys):
+    cid = seed_claim(db, "Report files are named rpt_YYYYMMDD.md under reports/.",
+                     corpus="sandbox")
+    first = {"hook_event_name": "pre_llm_call", "session_id": "h-1", "cwd": "/x",
+             "extra": {"is_first_turn": True, "user_message": "hi"}}
+
+    out = json.loads(_hook(monkeypatch, capsys, first, "--project", "sandbox"))
+    assert "rpt_YYYYMMDD.md" in out["context"] and "sandbox" in out["context"]
+    later = {**first, "extra": {"is_first_turn": False}}
+    assert _hook(monkeypatch, capsys, later, "--project", "sandbox") == ""
+
+    rec = _lines(server)
+    assert len(rec) == 1 and rec[0]["tool"] == "brief" and rec[0]["session"] == "h-1"
+    assert rec[0]["response"]["claims"][0]["id"] == cid
+
+
+def test_brief_hook_is_silent_when_there_is_nothing_or_something_breaks(
+        server, db, monkeypatch, capsys):
+    empty = {"hook_event_name": "pre_llm_call", "session_id": "h-2",
+             "extra": {"is_first_turn": True}}
+    assert _hook(monkeypatch, capsys, empty, "--project", "sandbox") == ""
+    monkeypatch.setattr(server, "RO_DSN", "postgresql://nobody@localhost:1/none")
+    assert _hook(monkeypatch, capsys, empty, "--project", "sandbox") == ""
+    monkeypatch.setattr("sys.stdin", __import__("io").StringIO("not json"))
+    from claimbase import cli
+
+    assert cli.main(["--no-backup", "hook", "brief"]) == 0

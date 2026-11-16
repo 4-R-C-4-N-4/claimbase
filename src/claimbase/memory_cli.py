@@ -3,7 +3,8 @@
     claimbase brief [--project P | --cwd DIR]
     claimbase inspect <claim-id>
     claimbase submit-session --harness claude --file <session.jsonl>
-    claimbase submit-session --hook            # Claude Code SessionEnd hook, JSON on stdin
+    claimbase submit-session --hook            # a harness session-end hook, JSON on stdin
+    claimbase hook brief                       # a harness turn/session-start hook
     claimbase writer run [--no-judge]
     claimbase replay --dsn <scratch dsn> <transcripts…>
     claimbase pr open <claim-id> "<amendment>" [--evidence "…"]
@@ -126,7 +127,17 @@ def cmd_submit_session(args) -> int:
         path = path or ctx.get("transcript_path")
         cwd = cwd or ctx.get("cwd")
         sid = sid or ctx.get("session_id")
-        outcome = outcome or ctx.get("reason")
+        extra = ctx.get("extra") or {}
+        outcome = outcome or ctx.get("reason") or extra.get("reason") \
+            or extra.get("turn_exit_reason")
+        # Hermes (`on_session_finalize`) sends no transcript path — its
+        # sessions are rows — and runs the hook with that profile's
+        # HERMES_HOME, which is where the rows are.
+        if args.harness == "hermes" and os.environ.get("HERMES_HOME") \
+                and args.db == "~/.hermes/state.db":
+            args.db = str(Path(os.environ["HERMES_HOME"]) / "state.db")
+        if not sid and not path:
+            return 0  # a finalize with no active session: nothing to hand over
 
     if args.harness == "hermes":
         if not sid:
@@ -147,6 +158,63 @@ def cmd_submit_session(args) -> int:
     red = s.meta.get("redactions")
     print(f"  queued {s.id}  [{s.project}]  {len(s.turns)} turns"
           + (f"  redacted {red}" if red else "") + f"\n  {out}")
+    return 0
+
+
+def render_brief(b: dict) -> str:
+    """A brief as text for a harness to put in front of its model."""
+    lines = [
+        f"[Project memory for \"{b['project']}\" — standing practices, decisions and "
+        "preferences recorded from earlier sessions. Apply them without being asked "
+        "again. If one looks wrong for this task, say so rather than silently "
+        "ignoring it. Use the `recall` tool for anything not listed.]"
+    ]
+    for c in b["claims"]:
+        tag = ", ".join(str(x) for x in (c["kind"], c.get("origin"), c.get("since"),
+                                         c.get("status")) if x)
+        lines.append(f"- {c['claim']} ({tag})")
+    return "\n".join(lines)
+
+
+def cmd_hook(args) -> int:
+    """Harness hooks. A hook must never break the session it is attached to:
+    every failure here is silent on stdout and exits 0, with the reason on
+    stderr where the harness logs it.
+
+    `brief` — for a hook that can inject context at the start of a session
+    (hermes `pre_llm_call`, Claude Code `SessionStart`). The harness calls
+    `brief` so the model does not have to remember to: measured on this
+    machine, an agent that is merely *able* to ask memory never did.
+    """
+    try:
+        raw = sys.stdin.read()
+        ctx = json.loads(raw) if raw.strip() else {}
+        extra = ctx.get("extra") or {}
+        # hermes fires pre_llm_call every turn; memory goes in once.
+        if ctx.get("hook_event_name") == "pre_llm_call" and not extra.get("is_first_turn"):
+            return 0
+        if ctx.get("session_id"):
+            os.environ["CLAIMBASE_SESSION"] = str(ctx["session_id"])
+        from . import mcp_server as m
+
+        if ctx.get("session_id"):
+            m.SESSION = str(ctx["session_id"])
+        # Through the server's dispatch seam, so a hook-delivered brief lands
+        # in the query log exactly like a tool-called one.
+        b = m._dispatch("brief", {
+            "project": args.project or os.environ.get("CLAIMBASE_PROJECT"),
+            "cwd": None if (args.project or os.environ.get("CLAIMBASE_PROJECT"))
+            else ctx.get("cwd"),
+            "budget_tokens": args.budget})
+        if not b.get("claims"):
+            return 0
+        text = render_brief(b)
+        if args.format == "text":
+            print(text)
+        else:
+            print(json.dumps({"context": text}))
+    except Exception as e:  # noqa: BLE001 — see docstring
+        print(f"claimbase hook {args.action}: {type(e).__name__}: {e}", file=sys.stderr)
     return 0
 
 
@@ -175,7 +243,19 @@ def _judge(args):
 def cmd_writer(args) -> int:
     from . import writer
 
+    from . import usage
+    from .mcp_server import _LOG_DEFAULT
+
     with connect() as conn:
+        # The query log says what each session was shown — including a brief a
+        # hook injected, which leaves no tool call in the transcript — so it
+        # is loaded before sessions are read for what they used.
+        log = Path(os.environ.get("CLAIMBASE_QUERY_LOG") or _LOG_DEFAULT)
+        n = usage.sync(conn, log)
+        conn.commit()
+        if n["new"] or n["feedback"]:
+            print(f"  usage: {n['new']} new calls, {n['hits']} hits, "
+                  f"{n['feedback']} feedback from the query log")
         r = writer.run(conn, judge=_judge(args), limit=args.limit)
     print(f"\n  sessions {r['sessions']}  episodes {r['episodes']}  "
           f"triggers {r['triggers']}  uses {r['used']}")
@@ -386,6 +466,14 @@ def register(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--cwd", default=None)
     p.add_argument("--outcome", default=None)
     p.set_defaults(fn=cmd_submit_session)
+
+    p = sub.add_parser("hook", help="harness hooks: JSON on stdin, never fails the session")
+    p.add_argument("action", choices=["brief"])
+    p.add_argument("--project", default=None)
+    p.add_argument("--budget", type=int, default=500)
+    p.add_argument("--format", default="json", choices=["json", "text"],
+                   help="json: {\"context\": …} (hermes); text: plain (Claude Code)")
+    p.set_defaults(fn=cmd_hook)
 
     def judged(p):
         p.add_argument("--no-judge", action="store_true",

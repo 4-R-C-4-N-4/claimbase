@@ -1,0 +1,4 @@
+[http]
+timeout = 10
+max_retries = 3
+user_agent = "widgetsync/1.0"

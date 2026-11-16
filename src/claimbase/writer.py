@@ -122,8 +122,13 @@ class LocalJudge:
     stand-in. Run `claimbase replay` and read the yield before trusting it."""
 
     def __init__(self, provider: str | None = None, model: str | None = None,
-                 max_tokens: int = 4096, timeout: float = 300.0) -> None:
+                 max_tokens: int | None = None, timeout: float = 300.0) -> None:
         from .extract import TEACHER_MODEL
+
+        # Reasoning counts against the cap on thinking models, and a cap that
+        # ends mid-thought returns an empty answer — which parses as a failure
+        # and is retried forever. Raise it for models that think at length.
+        max_tokens = max_tokens or int(os.environ.get("CLAIMBASE_JUDGE_MAX_TOKENS", 4096))
 
         self.provider = provider or os.environ.get("CLAIMBASE_JUDGE_PROVIDER", "llamacpp")
         self.model = model or os.environ.get("CLAIMBASE_JUDGE_MODEL", TEACHER_MODEL)
@@ -207,32 +212,43 @@ def _ts(iso: str | None) -> datetime | None:
     return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
 
 
-def attribute_uses(s: sessions.Session) -> list[tuple[str, int, str | None]]:
+def attribute_uses(s: sessions.Session, shown: list[tuple[str, str]] | None = None
+                   ) -> list[tuple[str, int, str | None]]:
     """(claim id, turn, ts) for each claim the session was shown and then
-    visibly acted on. One per claim: the first later turn that echoes it."""
+    visibly acted on. One per claim: the first later turn that echoes it.
+
+    A claim is "shown" by a claimbase tool result in the transcript, or — via
+    `shown`, (id, text) pairs from the query log — by a brief the harness
+    injected through a hook, which leaves no tool call behind. Those stand
+    for the whole session: a brief is context from the first turn on.
+    """
     out: list[tuple[str, int, str | None]] = []
     done: set[str] = set()
+    seen: list[tuple[int, int, dict]] = [
+        (-1, len(s.turns), {"id": cid, "claim": text}) for cid, text in (shown or [])]
     for i, t in enumerate(s.turns):
         if t.role != "tool_result" or sessions.claimbase_call(t) not in ("recall", "brief"):
             continue
-        for row in sessions.returned_claims(t):
-            cid = _uuid_or_none(row.get("id"))
-            words = _distinct(row.get("claim") or "")
-            if not cid or cid in done or len(words) < USE_MIN_TOKENS:
+        seen += [(i, min(len(s.turns), i + 1 + USE_LOOKAHEAD), row)
+                 for row in sessions.returned_claims(t)]
+    for i, end, row in seen:
+        cid = _uuid_or_none(row.get("id"))
+        words = _distinct(row.get("claim") or "")
+        if not cid or cid in done or len(words) < USE_MIN_TOKENS:
+            continue
+        for j in range(i + 1, end):
+            later = s.turns[j]
+            if later.role == "assistant":
+                body = later.text
+            elif later.role == "tool_call" and not sessions.claimbase_call(later):
+                body = json.dumps(later.args or {}, default=str)
+            else:
                 continue
-            for j in range(i + 1, min(len(s.turns), i + 1 + USE_LOOKAHEAD)):
-                later = s.turns[j]
-                if later.role == "assistant":
-                    body = later.text
-                elif later.role == "tool_call" and not sessions.claimbase_call(later):
-                    body = json.dumps(later.args or {}, default=str)
-                else:
-                    continue
-                got = words & _distinct(body)
-                if len(got) >= USE_MIN_TOKENS and len(got) / len(words) >= USE_OVERLAP:
-                    out.append((cid, j, later.ts))
-                    done.add(cid)
-                    break
+            got = words & _distinct(body)
+            if len(got) >= USE_MIN_TOKENS and len(got) / len(words) >= USE_OVERLAP:
+                out.append((cid, j, later.ts))
+                done.add(cid)
+                break
     return out
 
 
@@ -290,7 +306,18 @@ def ingest(conn, s: sessions.Session) -> dict:
                 )
                 n_trig += 1
 
-        uses = attribute_uses(s)
+        # What the query log says this session was shown. Joined on the
+        # harness's own session id, which a hook passes through; the MCP
+        # server's per-process id is carried in the submission's meta.
+        cur.execute(
+            """SELECT DISTINCT h.claim_id::text, c.content
+                 FROM retrieval_log l
+                 JOIN retrieval_hits h ON h.log_id = l.id
+                 JOIN claims c ON c.id = h.claim_id
+                WHERE l.tool IN ('brief', 'recall') AND l.session = ANY(%s)""",
+            ([x for x in (s.session_id, s.id, s.meta.get("mcp_session")) if x],),
+        )
+        uses = attribute_uses(s, cur.fetchall())
         n_used = 0
         for cid, turn, ts in uses:
             cur.execute(

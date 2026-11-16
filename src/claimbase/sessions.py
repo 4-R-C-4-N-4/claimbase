@@ -479,7 +479,7 @@ _CORRECTION: list[tuple[str, re.Pattern]] = [
     # "no," — not "no worries" or "no need", which the first version of this
     # rule also caught on real sessions.
     ("no-lead", re.compile(
-        r"^\s*(?:(?:no|nope|nah)\s*[,.!:;-]|no no\b|no (?:that|you|it|i|we|the|don'?t)\b|"
+        r"^\s*(?:(?:no|nope|nah)\s*[,.!:;—–-]|no no\b|no (?:that|you|it|i|we|the|don'?t)\b|"
         r"(?:wrong|incorrect)\b)", re.I)),
     ("thats-wrong", re.compile(
         r"\b(that'?s|that is|this is|it'?s|you'?re|you are) "
