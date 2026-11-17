@@ -84,7 +84,7 @@ class Judge(Protocol):
 
 
 JUDGE_SYSTEM = """You maintain the long-term memory of a coding agent. You are shown ONE \
-episode from a finished work session, the conversation around it, and the claims memory \
+episode from a captured work session, the conversation around it, and the claims memory \
 already holds that might relate to it.
 
 Decide what, if anything, this episode should change in memory.
@@ -95,6 +95,20 @@ tooling actually behaves. It must make sense to someone who never saw the conver
 name the concrete thing, no "it" / "that" / "the above". Write null when there is nothing \
 durable — a one-off instruction for this task only, a typo fix, chit-chat, a transient \
 error, anything that will not matter next week. Most episodes are null. Do not invent.
+
+Trigger labels are heuristic selection hints, not proof that the user issued a durable \
+instruction. Descriptive mentions of remembering, quoted or handoff-style reports, and \
+status summaries are not standing rules merely because they arrive in a user turn. \
+Identify the actual durable instruction or supported knowledge; otherwise return null.
+
+Preserve time, conditions and uncertainty from the evidence. Do not turn one failed attempt \
+into a permanent capability limit, a universal requirement, or an intended policy. A past \
+error is not proof that the tool can never work. A lone failed attempt or error report, \
+without a durable corrective rule, is null: it does not establish a negative capability, \
+a minimum resource requirement, or an intended routing policy. Do not repackage that \
+error as a historical memory to avoid returning null. If the user separately gives an \
+explicit standing corrective instruction, retain that instruction, not a theory inferred \
+from the failure.
 
 kind — practice (how work is done) | decision | preference (about the user, not the \
 project) | capability (what a tool can do) | observation (what happened once) | fact

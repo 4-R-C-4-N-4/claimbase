@@ -90,6 +90,67 @@ def test_changed_rule_requires_old_first_and_supersession():
     assert not all(c['passed'] for c in checker.collection_checks('changed-rule',scope,[{'claims':[]}],final))
 
 
+OBSERVED_REPLACEMENT = ('Report files in this project use the naming convention status-YYYY-MM-DD.md '
+    '(e.g., status-2026-11-15.md) and are stored directly under the reports/ directory, '
+    'replacing the prior obsolete rpt_YYYYMMDD.md convention.')
+
+
+@pytest.mark.parametrize('content', [OBSERVED_REPLACEMENT,
+    'Use status-YYYY-MM-DD.md instead of rpt_YYYYMMDD.md under reports/.',
+    'Reports use status-YYYY-MM-DD.md; rpt_YYYYMMDD.md is obsolete.',
+    'Use status-YYYY-MM-DD.md for all reports. Do not use rpt_YYYYMMDD.md.',
+    'Reports use status-YYYY-MM-DD.md rather than the old rpt_YYYYMMDD.md naming.',
+    'Use status-YYYY-MM-DD.md. The rpt_YYYYMMDD.md convention has been retired.',
+    'Use status-YYYY-MM-DD.md. Do not use `rpt_YYYYMMDD.md`.',
+    'Use status-YYYY-MM-DD.md. rpt_YYYYMMDD.md is obsolete and should no longer be used.'])
+def test_changed_rule_accepts_replacement_that_names_the_retired_rule(content):
+    scope='sandbox-changed-rule'
+    old=claim(scope,'Reports rpt_YYYYMMDD.md')
+    final={'claims':[{**old,'status':'superseded','superseded_by':'2'},claim(scope,content,ident='2')]}
+    checks=checker.collection_checks('changed-rule',scope,[{'claims':[old]}],final)
+    assert all(c['passed'] for c in checks), checks
+
+
+def test_changed_rule_tolerates_retired_mention_only_in_the_recorded_replacement():
+    # Same retiring wording, but the store does not record it as the old
+    # claim's supersession: it is an extra active claim naming rpt_.
+    scope='sandbox-changed-rule'
+    old=claim(scope,'Reports rpt_YYYYMMDD.md')
+    final={'claims':[{**old,'status':'superseded','superseded_by':'2'},
+                     claim(scope,'Reports status-YYYY-MM-DD.md',ident='2'),
+                     claim(scope,OBSERVED_REPLACEMENT,ident='3')]}
+    checks=checker.collection_checks('changed-rule',scope,[{'claims':[old]}],final)
+    assert not next(c for c in checks if c['check']=='old rule not active')['passed']
+
+
+@pytest.mark.parametrize('content', ['Report files are named rpt_YYYYMMDD.md under reports/.',
+    'Reports use rpt_YYYYMMDD.md or status-YYYY-MM-DD.md.',
+    'Use rpt_YYYYMMDD.md instead of status-YYYY-MM-DD.md.',
+    'Use rpt_YYYYMMDD.md or status-YYYY-MM-DD.md is obsolete.',
+    'Use status-YYYY-MM-DD.md instead of rpt_YYYYMMDD.md for drafts but use rpt_YYYYMMDD.md for final reports.',
+    'rpt_YYYYMMDD.md is obsolete for drafts only and remains required for final reports.',
+    'The old status- naming is replaced: use rpt_YYYYMMDD.md.',
+    'For final reports, use the old rpt_YYYYMMDD.md convention.',
+    'Do not use rpt_YYYYMMDD.md except for final reports.',
+    'rpt_YYYYMMDD.md is obsolete, except for final reports where it remains required.',
+    'Report files use rpt_YYYYMMDD.md; status-YYYY-MM-DD.md is obsolete.',
+    'Do not replace rpt_YYYYMMDD.md. It is the required report filename.',
+    'It is false that rpt_YYYYMMDD.md is obsolete. That filename is required.',
+    'Do not use rpt_YYYYMMDD.md for previews. Production reports must use that filename.',
+    'Replace rpt_YYYYMMDD.md daily with an updated report at the same path.',
+    'Use status-YYYY-MM-DD.md for previews. Do not replace rpt_YYYYMMDD.md.',
+    'Use status-YYYY-MM-DD.md for previews; never supersede rpt_YYYYMMDD.md.'])
+def test_changed_rule_still_fails_when_an_active_claim_prescribes_the_old_rule(content):
+    # Hardest case: the prescribing claim IS the recorded replacement.
+    scope='sandbox-changed-rule'
+    old=claim(scope,'Reports rpt_YYYYMMDD.md')
+    final={'claims':[{**old,'status':'superseded','superseded_by':'3'},
+                     claim(scope,'Reports status-YYYY-MM-DD.md',ident='2'),
+                     claim(scope,content,ident='3')]}
+    checks=checker.collection_checks('changed-rule',scope,[{'claims':[old]}],final)
+    assert not next(c for c in checks if c['check']=='old rule not active')['passed']
+
+
 def test_opposite_project_delivery_leak_fails():
     scope='sandbox-opposite-project-a'
     final={'claims':[claim(scope,'rpt_'),claim(scope[:-1]+'b','status-',ident='2')],

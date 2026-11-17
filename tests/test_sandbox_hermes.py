@@ -34,11 +34,41 @@ def test_launch_pins_file_tools_in_code_workspace(tmp_path, monkeypatch):
     assert cmd[cmd.index('--skills') + 1] == 'sandbox-capabilities'
 
 
+def test_launch_isolates_host_gateway_locks_per_home(tmp_path, monkeypatch):
+    captured = []
+    monkeypatch.setenv('HERMES_GATEWAY_LOCK_DIR', '/normal-host-locks')
+
+    def run(cmd, **kwargs):
+        captured.append(kwargs['env'])
+        return SimpleNamespace(returncode=0, stdout='', stderr='')
+
+    monkeypatch.setattr(sandbox.subprocess, 'run', run)
+    sessions = iter([None, 'control-session', None, 'memory-session'])
+    monkeypatch.setattr(sandbox, 'latest_session', lambda _: next(sessions))
+    homes = [tmp_path / 'home-control', tmp_path / 'home-memory']
+    for home in homes:
+        sandbox.hermes(home, tmp_path, 'test', None, 60, tmp_path / f'{home.name}.log')
+    for home, env in zip(homes, captured):
+        expected = str(home / 'runtime/gateway-locks')
+        assert env['HERMES_GATEWAY_LOCK_DIR'] == expected
+        meta = json.loads((tmp_path / f'{home.name}.log.commands.jsonl').read_text())
+        assert meta['gateway_lock_dir'] == expected
+    assert captured[0]['HERMES_GATEWAY_LOCK_DIR'] != captured[1]['HERMES_GATEWAY_LOCK_DIR']
+
+
 def test_memory_arm_only_exposes_recall(tmp_path, monkeypatch):
     monkeypatch.setattr(sandbox, "WORK", tmp_path)
     home = sandbox.write_home("memory", {"id": "bonsai", "ctx": 65536}, True)
     config = json.loads((home / "config.yaml").read_text())
     assert config["mcp_servers"]["claimbase"]["tools"]["include"] == ["recall"]
+
+
+def test_fresh_homes_bound_unmanaged_gateway_lifetime_equally(tmp_path):
+    for memory in (False, True):
+        home = sandbox.write_home(f'idle-{memory}', {'id': 'bonsai', 'ctx': 65536},
+                                  memory, work=tmp_path)
+        config = json.loads((home / 'config.yaml').read_text())
+        assert config['gateway']['unmanaged_idle_exit_seconds'] == 15
 
 
 def test_fresh_homes_share_only_the_job_dependency_cache(tmp_path, monkeypatch):

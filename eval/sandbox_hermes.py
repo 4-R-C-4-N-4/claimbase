@@ -247,6 +247,9 @@ def write_home(name: str, info: dict, memory: bool, *, work=None, env=None) -> P
         # one and hide whether claimbase did.
         "memory": {"memory_enabled": False, "user_profile_enabled": False},
         "hooks_auto_accept": True,
+        # Native idle shutdown waits for clients/admissions/work to finish.
+        # The 600s default accumulates throwaway gateways across a full batch.
+        "gateway": {"unmanaged_idle_exit_seconds": 15},
         "mcp_servers": {"sandbox_files": {
             "command": str(PY),
             "args": [str(ROOT / 'eval/sandbox_fileops.py'),
@@ -342,9 +345,14 @@ def hermes(home: Path, workdir: Path, prompt: str, resume: str | None, budget: i
             'home': str(home), 'cwd': str(workdir), 'resume': resume,
             'returncode': None, 'session': None, 'status': 'running'}
     log.parent.mkdir(parents=True, exist_ok=True)
+    # HERMES_HOME alone does not isolate the host-wide gateway rendezvous.
+    # Keep both arms away from normal-profile and other sandbox gateway locks.
+    gateway_lock_dir = str(home / 'runtime/gateway-locks')
+    meta['gateway_lock_dir'] = gateway_lock_dir
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, cwd=workdir,
-            env={**os.environ, 'HERMES_HOME': str(home), 'HERMES_ACCEPT_HOOKS': '1'},
+            env={**os.environ, 'HERMES_HOME': str(home), 'HERMES_ACCEPT_HOOKS': '1',
+                 'HERMES_GATEWAY_LOCK_DIR': gateway_lock_dir},
             timeout=budget + 120)
         meta['returncode'] = r.returncode
         with log.open('a') as f:

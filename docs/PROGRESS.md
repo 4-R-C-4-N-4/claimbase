@@ -1,12 +1,39 @@
 # Memory Evaluation Improvements — Progress
 
-Integration branch: rfc/harness-memory, worktree /home/ivy/Work/claimbase-memory.
-Owner explicitly authorized committing/pushing this work and opening a PR after the completed sandbox. No merge, live-store migration or normal-profile change is authorized.
+Historical integration: rfc/harness-memory, merged as PR #1 at eec9f9ae7b4da19b9addda115cc472ee4634e13e. The older PR authorization/status entries below describe that completed work, not the current follow-up.
+Current follow-up: fix/shadow-retention, worktree /home/ivy/Work/claimbase-shadow. Local changes only; no new commit, push, live-store migration, injection or normal-profile change.
 Contract and ordered acceptance criteria: docs/plans/memory-evaluation-improvements.md.
 
 Baseline verified: 171 passed, 2 skipped with isolated HOME and tests/test_mcp_sandbox.py excluded (live-store dependencies). Previous real three-rule experiment: control 1/3, memory 3/3; lexical usage proxy falsely inferred zero uses. Its artifacts remain historical, not the scoreboard for the new implementation.
 
 ## Current phase
+
+2026-11-17: the bounded self-dogfood retention regression is repaired and exercised locally. This is not Phase 4 or Phase 5 acceptance. Two frozen genuine checkpoints remained partial; no sessions were recaptured or represented as finalized.
+
+- The original rehearsal retained one unsupported GPU/context-limit proposal from 13 triggers. Descriptive mentions of remembering inside pasted reports are no longer automatically decisions. Direct memory instructions remain eligible; soft line wraps and remember-led questions have regressions.
+- The judge now treats labels as heuristic and makes an isolated error without a durable corrective rule null. An initial softer policy failed its direct real-source probe; that candidate is preserved, not counted as a pass.
+- The second candidate passed direct probes but turned approval of a bounded trial into permanent system-of-record adoption. Audit traced a contributing context defect: silent 600-character slices removed the earlier shadow-only conditions. Context now reserves the episode and nearby dialogue ahead of tool noise, uses bounded head/tail excerpts with visible truncation, renders chronologically and honors the full character budget.
+- Final local Bonsai candidate: the same two partial checkpoints, 109 episodes, 11 terminal trigger judgments, 11 nothing, zero proposals, zero pending and zero scoring failures. Two descriptive report triggers were removed; genuine decision selection remains. Five separate direct probes passed: the original historical report, an export error and a task-only exception returned null; a standing naming instruction and an explicit corrective standing rule were retained. These synthetic controls were not inserted into the replay store.
+- Final isolated-HOME scratch-Postgres gate: 316 passed, 2 skipped; tests/test_mcp_sandbox.py remains excluded. Independent code review: spec PASS, quality APPROVED, no findings. Review did not rerun the database/model tests or approve general collection accuracy. Bounded context can still omit middle/out-of-window qualifiers.
+- All candidate reports, exact source snapshots and frozen redacted inputs are private, owner-readable and hash-verified under ~/.local/state/claimbase-shadow/claimbase/retention-fix-1794932048/. The original run-1794926399 audit/results remain unchanged. Each inference run used an owned user service capped at 12 GiB RAM, outside the generic worker scope; owned inference stopped and task-loaded embeddings unloaded.
+
+Expanded-sandbox revalidation STARTED on 2026-11-17, before retrieval pressure. Service claimbase-memory-retention-revalidation-1794939573.service, invocation 8270530dbf2649f69dc02ae2c07983eb, runs a private content-addressed copy of the uncommitted worktree: snapshot 0da379a65de45803d26caacaab397bb235de91a6753dbec53cb3d99d4917e03a. Job root: ~/.local/state/claimbase-shadow/claimbase/sandbox-revalidation-1794939573594228646/. The source worktree's existing per-home gateway-rendezvous isolation change and its test were preserved and included. Current worktree and frozen-copy gates both passed 317 tests, 2 skipped, with isolated HOME/scratch Postgres and live-corpus test excluded. Snapshot setup initially copied read-only fixture modes into test work copies; restored their original writable modes before any model trial, preserved the failed preflight record, and reran the gate without changing source bytes or checks.
+
+That first revalidation was intentionally STOPPED before its RAM ceiling: its changed-rule smoke passed, but isolated gateways/workers accumulated during the full batch. No kernel OOM occurred. Its lifecycle records signal 15, all owned processes stopped, and task embeddings unloaded; raw reports and CONTROLLED_STOP.md remain preserved, and the incomplete full batch is not a memory-quality score. Per-home host-lock isolation exposes the native 600-second idle retention cost across many homes. The repair uses installed Hermes's graceful gateway.unmanaged_idle_exit_seconds=15 only in generated scratch configs, equally in both arms, retaining native active-client/work/admission/job guards and session state. A red-first config regression and full isolated-HOME gate now pass 318 tests, 2 skipped; bounded independent code review is PASS/APPROVED, with actual idle shutdown and resume still requiring a NEW smoke. No task/checker/schema changes, higher global limits, normal-profile shutdown or force-PID cleanup were used. Replacement must use a fresh content-addressed snapshot and new trials; the old passing smoke is not pooled into its scores.
+
+Replacement invocation 648944cbbcb4401a95f881e92849de7e (snapshot c5dffa13…, native 15-second idle exit) COMPLETED: smoke 1/1, full 9/9, repeated 11/12 memory task+collection, zero execution errors, phase3_pass FALSE. Native idle exit kept retained gateways bounded. Sole failure: changed-rule trial-03 "old rule not active". The store was correct (old rpt_ claim superseded by the only active claim), but that claim named the rule it replaced ("replacing the prior obsolete rpt_YYYYMMDD.md convention") and the checker was a bare substring test. Recorded as failed (RESULT.md in its job root); not relabelled or pooled.
+
+Checker revised afterwards in eval/sandbox_checkers.py: an active rpt_ mention is tolerated only in the claim the store records as the old claim's superseded_by, which also states status- and retires rpt_ without exception (conservative lexical test). Three independent review rounds; the first two found leakage counterexamples, all now regression tests; final PASS/APPROVED ($TMPDIR/claimbase-changed-rule-checker-confirm3.json). Accepted limit: may reject unusual genuine retirements, which can only lower memory scores.
+
+Fresh invocation 1a75ea4fee974aae8dfffc87c0248ed1 (snapshot ca4dde08612366a368595097cff6d33d9c0a96ac81ca944c3346ea46cee2f771, revised checker; job root sandbox-revalidation-1794945447316207771) COMPLETED and PASSED: smoke 1/1, full 9/9, repeated 12/12 memory task+collection; controls 0/1, 3/9, 3/12; zero execution errors; phase3_pass TRUE. Snapshot valid at start and end, Hermes fingerprints unchanged, owned model stopped, embeddings unloaded. Parent verified every trial report, completed teaching and non-empty collection checks. Repeated trial-02 again produced a replacement naming the retired rule; the revised check accepted it through the recorded supersession link. Launch gate: 344 passed, 2 skipped (isolated HOME, scratch Postgres, live-corpus test excluded). Each completed run's rebuildable dependency installs were archived and byte-verified before removal; reports, stores and workdirs kept.
+
+Next gate: Phase 4 retrieval pressure. Changes remain uncommitted on fix/shadow-retention.
+
+Earlier Phase 3 scores below remain evidence of their frozen commits, not scores for this uncommitted follow-up. Finalized real-project shadow acceptance, continuous collection and any live injection remain outstanding and separate.
+
+Plan: docs/plans/shadow-retention.md. Findings: findings.md, 2026-11-17 retention follow-up. No general precision/recall, representative benefit or causal-use claim is made from these selected regression cases.
+
+### Completed Phase 3 integration history (not current follow-up scores)
 
 Fresh post-review verification COMPLETED on frozen behavioral commit cdd0b94c8c71d7fddd5bb17bda729dc401f0a03a (execution checkout cffeb32061c6d5e3ae7f80723442af7dbc40b067). Service claimbase-memory-eval-reviewfix.service, invocation af8059b27e9d48c8850e19701979cdce, exited successfully and stopped its owned model; no llama-server remains. Exact status: eval/.sandbox/durable-1794884707158893256/status.json, phase3_pass=true. Smoke passed; full control 2/9, memory task+collection 9/9; three fresh subset trials each control 1/4 and memory task+collection 4/4 (aggregate control 3/12, memory 12/12). Zero execution errors. Parent read all requested reports, verified terminal teaching, unconditional collection assertions and all 73 homes' local/no-fallback, disabled built-in memory and exact confined tool configuration. Portable evidence: eval/evidence/2026-11-16-hermes-bonsai-post-review.json; old evidence remains historical and unmodified. PR #1 is ready for final evidence review; no merge or Phase 4 execution authorized/performed yet.
 
@@ -37,14 +64,14 @@ Fair capability repair: user approved fixing the test rather than blaming Bonsai
 
 Fair repair review follow-up: independent review APPROVED WITH LIMITS. Addressed its audit gap by flushing an attempt before mutation and logging success/error under one call_id; added a red-first real-stdio rejected-call assertion and an audit-unavailable/no-mutation regression. Strengthened exact claimbase tools/resources/prompts assertions (an existing test already enforced recall-only). Documented separate hook versus MCP confinement. Low race caveat remains scoped to external concurrent filesystem mutation, outside the cooperative file-only model's capabilities. Stopped the first fair smoke intentionally to freeze final code before retry; preserved it. Full gate now 284 passed, 2 skipped; diff check clean. New independent service invocation 3d084c275c64459fb69bf376cdb05131, status/logs eval/.sandbox/durable-1794871598411867092/, smoke run-1794871600477356276-318443, watcher proc_72243c067dfc. Verified Bonsai ACTUALLY called sandbox_files rename_file on the first correction; audit reports ok, old filename absent, new report read back with preserved content. Smoke teaching continues with zero errors observed; no memory-outcome claim yet. Full+repeated runs remain gated.
 
-4. Retrieval pressure — pending phase 3.
-5. Real-project shadow evaluation — pending phase 4; capture/proposals only, no live injection or profile changes.
+4. Retrieval pressure — not run. Original Phase 3 passed; changed retention behavior needs affected sandbox revalidation before advancing.
+5. Real-project shadow acceptance — pending phase 4. Bounded partial-checkpoint rehearsals and their audits are not this completed-session gate; no live injection or profile changes.
 
-## PR publication
+## Historical PR #1 publication
 
 Owner requested a PR and posted sandbox summary after execution completed. Versioned notes: docs/evaluation/hermes-bonsai-sandbox-2026-11-16.md; allowlisted scenario evidence with raw-report SHA-256 hashes: eval/evidence/2026-11-16-hermes-bonsai.json. Raw transcripts, databases and runtime caches remain local/ignored. The branch includes five earlier memory commits on top of six unpublished main prerequisites; the PR must disclose that ancestry rather than push main silently. The unrelated src/claimbase/llm.py model-cleanup example edit is excluded from the new commit. Integrated pre-publication review and exact-SHA checks are required; no merge or Phase 4 execution yet.
 
-## Review state
+## Historical PR #1 review state
 
 Phase 1 spec review: PASS (claimbase-phase1-spec-final.txt in $TMPDIR).
 Phase 1 quality review: APPROVED (claimbase-phase1-quality-final.txt in $TMPDIR).

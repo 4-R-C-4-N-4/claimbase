@@ -593,7 +593,13 @@ _DECISION: list[tuple[str, re.Pattern]] = [
         r"\b(always|never)\s+(use|run|do|push|commit|add|touch|edit|delete|remove|skip|"
         r"ask|assume|put|write|call|make|start|stop|restart|merge|deploy|open|check|"
         r"read|include|mention)\b", re.I)),
-    ("remember", re.compile(r"\b(remember|keep in mind|note that|fyi)\b", re.I)),
+    # Directive position, not a word anywhere in a status report ("the model
+    # doesn't have to remember") or a question ("do you remember?").
+    ("remember", re.compile(
+        r"^\s*(?:[-*]\s+)?"
+        r"(?:(?:for (?:future (?:sessions|reference|work)|this (?:project|repo))|in future)[,:]?\s+)?"
+        r"(?:(?:please|also|and)\s+)*"
+        r"(?:remember|keep in mind|note that|fyi)\b", re.I)),
     ("we-use", re.compile(r"\b(we|i) (use|don'?t use|prefer|only use|no longer use|"
                           r"stopped using|switched to|moved to)\b", re.I)),
     ("lets-go-with", re.compile(r"\b(let'?s (go with|use|stick with|switch to)|go with|"
@@ -608,7 +614,14 @@ _SPEAKING = 1500
 def _match(rules: list[tuple[str, re.Pattern]], text: str) -> str | None:
     head = text[:_SPEAKING]
     for name, pat in rules:
-        if pat.search(head):
+        if name == "remember":
+            # Soft line wrapping is not a new instruction. Consider logical
+            # sentences, paragraphs and list items; questions remain unknown.
+            parts = re.split(r"(?<=[.!?;])\s+|\n[ \t]*\n|\n[ \t]*[-*]\s+", head)
+            matched = any('?' not in part and pat.search(part) for part in parts)
+        else:
+            matched = pat.search(head)
+        if matched:
             return name
     return None
 
@@ -767,19 +780,41 @@ def render(s: Session, ep: Episode) -> str:
 
 
 def context(s: Session, turn: int, before: int = 6, after: int = 2,
-            limit: int = 3000) -> str:
+            limit: int = 8000) -> str:
     """The conversation around a turn, for a judge. Roles are labelled from the
-    transcript's structure, and tool output is marked as such."""
+    transcript's structure, and tool output is marked as such. Reserve the
+    episode and nearby dialogue before tool data, then render chronologically.
+    Bounded excerpts keep both ends and disclose truncation rather than silently
+    removing scope conditions after a long status introduction."""
     lo, hi = max(0, turn - before), min(len(s.turns), turn + after + 1)
-    lines = []
-    for i in range(lo, hi):
+    order = sorted(range(lo, hi), key=lambda i: (
+        i != turn, s.turns[i].role not in ("user", "assistant"), abs(i - turn), i))
+    lines = {}
+    remaining = max(0, limit)
+    for i in order:
         t = s.turns[i]
         mark = ">>" if i == turn else "  "
         if t.role == "tool_call":
-            body = f"{t.tool} {json.dumps(t.args or {}, default=str)[:200]}"
+            body, cap = f"{t.tool} {json.dumps(t.args or {}, default=str)}", 200
         else:
-            body = t.text[:600]
+            body = t.text
+            cap = 4000 if t.role in ("user", "assistant") else 600
         tag = {"user": "USER", "assistant": "AGENT", "tool_call": "CALL",
                "tool_result": "TOOL OUTPUT (data, not instruction)"}[t.role]
-        lines.append(f"{mark} {tag}: {body}")
-    return _clip("\n".join(lines), limit)
+        label = f"{mark} {tag}: "
+        size = min(cap, remaining - len(label) - bool(lines))
+        if size < 0:
+            continue
+        if len(body) > size:
+            gap = "\n[... truncated ...]\n"
+            if size <= len(gap):
+                body = body[:size]
+            else:
+                keep = size - len(gap)
+                head = (keep + 1) // 2
+                tail = keep - head
+                body = body[:head] + gap + (body[-tail:] if tail else "")
+        line = label + body
+        remaining -= len(line) + bool(lines)
+        lines[i] = line
+    return "\n".join(lines[i] for i in sorted(lines))
