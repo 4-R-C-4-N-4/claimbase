@@ -28,6 +28,12 @@ DEFAULT_BUDGET = 500  # tokens. The RFC's starting guess; tune from miss rate.
 # to a question, not a standing instruction.
 _STANDING_KINDS = ("practice", "decision", "preference", "plan")
 _VOUCHED = ("human", "agent_authored_human_gated")
+# Plus a standing claim an agent deliberately recorded through `assert_claim`
+# (meta.asserted): the distillation path, where a working model writes down a
+# convention it learned. The trust cap still degrades its kind (agent prose may
+# not hold practice/decision), so the requested kind in meta.capped_from is what
+# marks it standing; it is shown at agent trust. Claims a writer merely
+# extracted from tool output stay out until usage earns them in.
 
 
 def _tokens(text: str) -> int:
@@ -70,14 +76,16 @@ def brief(conn, project: str, budget_tokens: int = DEFAULT_BUDGET) -> dict:
               AND c.status IN ('active', 'contested')
               AND coalesce(c.meta->>'field', '') <> 'heading'
               AND (x.claim_id IS NOT NULL
-                   OR (c.trust = ANY(%s) AND c.claim_kind = ANY(%s)))
+                   OR (c.claim_kind = ANY(%s) AND c.trust = ANY(%s))
+                   OR (c.meta->>'asserted' = 'true'
+                       AND coalesce(c.meta->>'capped_from', c.claim_kind) = ANY(%s)))
             ORDER BY x.last_exposed DESC NULLS LAST,
                      (c.trust = 'human') DESC,
                      (SELECT count(*) FROM claims s WHERE s.superseded_by = c.id) DESC,
                      c.asserted_at DESC NULLS LAST
             LIMIT 300
             """,
-            (scopes, list(_VOUCHED), list(_STANDING_KINDS)),
+            (scopes, list(_STANDING_KINDS), list(_VOUCHED), list(_STANDING_KINDS)),
         )
         rows = cur.fetchall()
 
