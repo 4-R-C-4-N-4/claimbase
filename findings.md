@@ -850,7 +850,7 @@ clause still applies.
 
 ## 2026-11-16 — Twelve weeks of silence, and what trigger selection found
 
-Written while starting the memory-layer branch (GOALS.md). Two things were
+Written while starting the memory-layer branch ([GOALS.md](docs/GOALS.md)). Two things were
 measured before any of it was built; neither is a scoreboard.
 
 ### Nobody has asked the store anything since August

@@ -78,6 +78,6 @@ Acceptance: an actual proposal/evidence artifact from real work, alongside an ex
 
 ## Verification and progress
 
-Run all DB-touching checks only against claimbase-test scratch databases on port 5434. Apply new additive migrations there only. Full gate: isolated HOME under $TMPDIR, .venv/bin/python -m pytest -q -rs --ignore=tests/test_mcp_sandbox.py, plus git diff --check and real local-model runs for phases 3–5. Preserve the original successful three-rule run as historical evidence. Update PROGRESS.md per phase and findings.md/GOALS.md with measured results, limitations and review status.
+Run all DB-touching checks only against claimbase-test scratch databases on port 5434. Apply new additive migrations there only. Full gate: isolated HOME under $TMPDIR, .venv/bin/python -m pytest -q -rs --ignore=tests/test_mcp_sandbox.py, plus git diff --check and real local-model runs for phases 3–5. Preserve the original successful three-rule run as historical evidence. Update docs/PROGRESS.md per phase, and update findings.md and docs/GOALS.md with measured results, limitations and review status.
 
 Review: use available Codex CLI (ChatGPT-authenticated); the default delegate provider previously returned HTTP 429. Obtain spec and quality reviews of the exact integrated changes, then independently execute the reported gates. A reviewer unavailable due to quota is recorded as pending, not passed.

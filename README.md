@@ -89,7 +89,7 @@ Corpora are declared in [`corpora/*.toml`](corpora/) — named, and never derive
 the working directory.
 
 The memory layer — session ingest, memory PRs, usage measures — is specified in
-**[GOALS.md](GOALS.md)** and tested against a scratch database
+**[GOALS.md](docs/GOALS.md)** and tested against a scratch database
 (`scripts/test_db.sh up`), never the live one.
 
 For agent access see **[MCP.md](MCP.md)**. Read-only by default; writes are opt-in,

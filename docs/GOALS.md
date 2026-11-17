@@ -4,7 +4,7 @@ Branch `rfc/harness-memory`. Source: *RFC: Harness-independent agent memory*
 (2026-11-15). This file is the working contract for that branch: what the RFC
 asks for, how each piece maps onto claimbase as it exists, what is decided, and
 what "done" means. Status is updated in place; measurements go in
-[findings.md](findings.md), not here.
+[findings.md](../findings.md), not here.
 
 The RFC is treated as **claimbase's next phase, on its Postgres store** — not a
 new system. The gold set, the eval harness, the standing-aware ranking and the
@@ -208,8 +208,8 @@ The real runs exposed and corrected scope widening, unavailable filesystem
 operations, suppressed capability guidance, dependency-cache disk growth and
 chat-lifetime coupling. Both arms now receive identical confined rename/delete
 tools; no shell or memory-writing tools were added. Failed/contaminated runs
-remain separate. See the [sandbox notes](docs/evaluation/hermes-bonsai-sandbox-2026-11-16.md)
-and [post-review portable evidence](eval/evidence/2026-11-16-hermes-bonsai-post-review.json).
+remain separate. See the [sandbox notes](evaluation/hermes-bonsai-sandbox-2026-11-16.md)
+and [post-review portable evidence](../eval/evidence/2026-11-16-hermes-bonsai-post-review.json).
 These fresh results cover behavioral commit cdd0b94; initial pre-review evidence
 remains separately preserved, not pooled or overwritten.
 

@@ -88,7 +88,7 @@ A harness needs three calls and no memory logic of its own:
 The agent never decides what to remember. A separate writer
 (`claimbase writer run`, a batch job that can wait for the GPU) reads the
 submitted transcript and collects only from the moments that mattered. See
-[GOALS.md](GOALS.md).
+[GOALS.md](docs/GOALS.md).
 
 ### Claude Code
 
