@@ -144,6 +144,10 @@ def cmd_submit_session(args) -> int:
             print("  hermes sessions are rows, not files: pass --session-id", file=sys.stderr)
             return 1
         s = sessions.read_hermes(sid, args.db)
+        # A gateway shell hook's cwd is the gateway checkout, not the work.
+        # The persisted session owns its workspace; explicit --cwd still wins.
+        if args.hook and args.cwd is None:
+            cwd = s.cwd
     else:
         if not path:
             print("  pass --file (or --hook)", file=sys.stderr)
@@ -152,7 +156,7 @@ def cmd_submit_session(args) -> int:
         if sid:
             s.session_id = sid
     s.cwd = cwd or s.cwd
-    s.project = args.project
+    s.project = args.project or os.environ.get("CLAIMBASE_PROJECT")
     s.outcome = outcome or s.outcome
     out = sessions.submit(s)
     red = s.meta.get("redactions")
@@ -193,19 +197,18 @@ def cmd_hook(args) -> int:
         # hermes fires pre_llm_call every turn; memory goes in once.
         if ctx.get("hook_event_name") == "pre_llm_call" and not extra.get("is_first_turn"):
             return 0
-        if ctx.get("session_id"):
-            os.environ["CLAIMBASE_SESSION"] = str(ctx["session_id"])
         from . import mcp_server as m
 
-        if ctx.get("session_id"):
-            m.SESSION = str(ctx["session_id"])
         # Through the server's dispatch seam, so a hook-delivered brief lands
         # in the query log exactly like a tool-called one.
         b = m._dispatch("brief", {
             "project": args.project or os.environ.get("CLAIMBASE_PROJECT"),
             "cwd": None if (args.project or os.environ.get("CLAIMBASE_PROJECT"))
             else ctx.get("cwd"),
-            "budget_tokens": args.budget})
+            "budget_tokens": args.budget}, canonical_session=(
+                f"{'hermes' if ctx.get('hook_event_name') == 'pre_llm_call' else 'claude'}:{ctx['session_id']}"
+                if ctx.get("session_id") and ctx.get("hook_event_name") in
+                ("pre_llm_call", "SessionStart") else None))
         if not b.get("claims"):
             return 0
         text = render_brief(b)
@@ -362,8 +365,19 @@ def print_measures(m: dict) -> None:
           f"   last call: {(a['last_call'] or 'never')[:16]}"
           f"   daily-use gate: {'met' if a['daily_use_gate'] else 'NOT met'}")
     print(f"  sessions submitted: {a['sessions']} ({a['sessions_unprocessed']} awaiting a judge)\n")
+    d = m['delivery']
+    print(f"  delivered           {d['retrievals']} retrievals, {d['results']} results, {d['claim_hits']} claim hits")
+    print(f"  explicit feedback   {m['feedback']}")
+    i = m['inference']
+    print(f"  inferred use        {i['claim_uses']} claim/session pairs in {i['sessions']} sessions; weak evidence")
+    o = m['outcomes']
+    print(f"  independent checks  {o['passed']} passed / {o['failed']} failed; no causal use implied")
+    for result in o["records"]:
+        print(f"    {result['session']} / {result['run']} / {result['checker']}: "
+              f"{'pass' if result['passed'] else 'fail'}  evidence: "
+              f"{json.dumps(result['evidence'], ensure_ascii=False)}")
     r = m["miss_rate"]
-    print(f"  miss rate           {_pct(r['value']):>5}   {r['missed']} missed / {r['used']} used"
+    print(f"  miss rate           {_pct(r['value']):>5}   {r['missed']} missed / {r['inferred']} inferred"
           f" / {r['unknown']} unknown, of {r['recalls']} recalls ({r['empty']} empty)")
     r = m["dead_weight"]
     print(f"  dead weight         {_pct(r['value']):>5}   {r['never_retrieved']:,} of "
@@ -378,7 +392,7 @@ def print_measures(m: dict) -> None:
     print(f"  revert rate         {_pct(r['value']):>5}   {r['reverted']} of {r['merged']}"
           " merged PRs later undone (a floor)")
     if m["yield_per_trigger"]:
-        print("\n  yield per trigger      triggers  scored  claims   used  yield")
+        print("\n  yield per trigger      triggers  scored  claims inferred  yield")
         for t, v in m["yield_per_trigger"].items():
             print(f"    {t:<20} {v['triggers']:>8} {v['scored']:>7} {v['claims']:>7} "
                   f"{v['used']:>6}  {_pct(v['yield']):>5}")
@@ -420,6 +434,23 @@ def cmd_usage(args) -> int:
             print(f"  {log}\n  lines {n['lines']}  new calls {n['new']}  hits {n['hits']}"
                   f"  feedback {n['feedback']}  unmatched results {n['unmatched']}"
                   + (f"  unparseable {n['bad']}" if n["bad"] else ""))
+            return 0
+        if args.action == "record-outcome":
+            try:
+                if args.passed is None:
+                    raise ValueError("--passed is required")
+                evidence = json.loads(args.evidence)
+                result = usage.record_outcome(conn, _project(args), args.session, args.run,
+                                              args.checker, args.passed == "true", evidence)
+                conn.commit()
+            except (ValueError, TypeError) as exc:
+                print(f"  outcome error: {exc}", file=sys.stderr)
+                return 2
+            if args.json:
+                _dump(result)
+            else:
+                print(f"  recorded {result['checker']} for {result['session']}: "
+                      f"{'pass' if result['passed'] else 'fail'} (run {result['run']})")
             return 0
         m = usage.measures(conn, _project(args))
         if args.json:
@@ -513,8 +544,13 @@ def register(sub: argparse._SubParsersAction) -> None:
     p.set_defaults(fn=cmd_pr)
 
     p = sub.add_parser("usage", help="the query log as tables, and the six measures")
-    p.add_argument("action", choices=["sync", "report"])
+    p.add_argument("action", choices=["sync", "report", "record-outcome"])
     p.add_argument("--log", default=None, help="query log path (default: the server's)")
+    p.add_argument("--session", default=None, help="harness-qualified session ID")
+    p.add_argument("--run", default=None, help="independent evaluation run ID")
+    p.add_argument("--checker", default=None, help="checker identifier")
+    p.add_argument("--passed", choices=["true", "false"], default=None)
+    p.add_argument("--evidence", default="{}", help="JSON artifact evidence")
     scoped(p)
     p.set_defaults(fn=cmd_usage)
 

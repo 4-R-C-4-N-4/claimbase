@@ -156,6 +156,27 @@ def test_a_preference_belongs_to_the_user_not_the_project(db, embed):
     assert claim_row(db, _trigger(db, "claude:s4")[0]["claim_id"])["corpus"] == "self"
 
 
+@pytest.mark.parametrize("correction,claim", [
+    ("No, that file name is wrong for this project. Report files here are always "
+     "named rpt_YYYYMMDD.md directly under reports/.",
+     "Report files in this project are always named rpt_YYYYMMDD.md under reports/."),
+    ("No, in this repository I prefer tabs for indentation.",
+     "The user prefers tabs for indentation."),
+    ("No, here I prefer local overrides instead of changing generated defaults.",
+     "The user prefers local configuration overrides."),
+    ("No, I prefer short filenames.",
+     "In this project the user prefers short filenames."),
+])
+def test_project_correction_cannot_escape_scope_as_a_preference(db, embed, correction, claim):
+    s = _session("scoped-preference", Turn("assistant", "Done.", ts=T0),
+                 Turn("user", correction, ts=T0))
+    writer.ingest(db, s)
+    writer.score(db, s, Scripted(correction=Verdict("novel", claim, "preference")))
+    c = claim_row(db, _trigger(db, s.id)[0]["claim_id"])
+    assert c["corpus"] == "guru"
+    assert _count(db, "SELECT count(*) FROM claims WHERE corpus = 'self'") == 0
+
+
 def _lookup_session(sid):
     return _session(
         sid, Turn("user", "deploy guru-web", ts=T0),
@@ -306,7 +327,7 @@ def test_a_hook_injected_brief_is_attributed_through_the_query_log(db, embed, tm
     cid = seed_claim(db, "Report files are named rpt_YYYYMMDD.md under reports/.")
     log = tmp_path / "q.jsonl"
     log.write_text(json.dumps({
-        "ts": T0, "client": "hermes-sandbox", "session": "h-77", "project": "guru",
+        "ts": T0, "client": "hermes-sandbox", "session": "h-77", "canonical_session": "hermes:h-77", "project": "guru",
         "tool": "brief", "args": {},
         "response": {"claims": [{"id": cid, "claim": "Report files are named "
                                  "rpt_YYYYMMDD.md under reports/."}]}}) + "\n")

@@ -306,13 +306,20 @@ def stats(project: str | None = None) -> dict:
     return _dispatch("stats", {"project": project})
 
 
-def _dispatch(name: str, args: dict) -> Any:
+def _dispatch(name: str, args: dict, *, canonical_session: str | None = None) -> Any:
     """Log-wrapping entry: every tool call, its arguments, latency and full
     response (or error) lands in the query log. One seam covers all tools,
     including `assert` when writes are enabled — a write is the record most
     worth having in an audit trail."""
     t0 = time.monotonic()
+    call_id = str(uuid.uuid4())
+    if canonical_session is None and os.environ.get("CLAIMBASE_HARNESS") and os.environ.get("CLAIMBASE_SESSION"):
+        canonical_session = f"{os.environ['CLAIMBASE_HARNESS']}:{os.environ['CLAIMBASE_SESSION']}"
+    from .sessions import canonical_identity
+    canonical_session = canonical_identity(canonical_session)
     base = {
+        "call_id": call_id,
+        "canonical_session": canonical_session,
         "ts": datetime.now(timezone.utc).isoformat(),
         "client": CLIENT,
         "session": SESSION,
@@ -330,6 +337,8 @@ def _dispatch(name: str, args: dict) -> Any:
         _log_call({**base, "ms": round((time.monotonic() - t0) * 1000),
                    "error": f"{type(e).__name__}: {e}"})
         raise
+    if isinstance(out, dict):
+        out = {"_claimbase": {"call_id": call_id, "tool": name}, **out}
     _log_call({**base, "ms": round((time.monotonic() - t0) * 1000), "response": out})
     return out
 

@@ -36,7 +36,7 @@ TEST_RO_DSN = os.environ.get(
 )
 
 _TABLES = (
-    "triggers, memory_prs, exposures, feedback, retrieval_hits, retrieval_log, "
+    "session_receipts, usage_outcomes, triggers, memory_prs, exposures, feedback, retrieval_hits, retrieval_log, "
     "session_lookups, sessions, claim_entities, conflicts, claims_review, claims, "
     "entity_aliases, entities, edges, schema_types, extraction_progress, "
     "extractor_runs, events"

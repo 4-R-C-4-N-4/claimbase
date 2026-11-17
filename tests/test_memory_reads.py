@@ -149,14 +149,14 @@ class TestUsage:
             cur.execute("SELECT claim_id::text, claim_corpus FROM retrieval_hits ORDER BY claim_corpus")
             assert cur.fetchall() == [(a, "guru"), (b, "guru-web")]
             cur.execute("SELECT kind, via FROM exposures WHERE claim_id = %s", (b,))
-            assert cur.fetchall() == [("used", "feedback")], "explicit feedback is a use"
+            assert cur.fetchall() == [], "legacy feedback has no authenticated session"
 
     def test_miss_rate_separates_missed_from_unknown(self, db, tmp_path):
         used = seed_claim(db, "Deploy from a release tag.")
         idle = seed_claim(db, "The taxonomy lives in taxonomy.toml.")
         log = tmp_path / "q.jsonl"
         rec = lambda ts, q, rows: {  # noqa: E731
-            "ts": ts, "session": "mcp-1", "project": "guru", "tool": "recall",
+            "ts": ts, "session": "mcp-1", "canonical_session": "claude:s", "project": "guru", "tool": "recall",
             "args": {"query": q}, "response": {"results": rows}}
         _log(log,
              rec("2026-11-16T10:00:00+00:00", "how to deploy", [{"id": used, "claim": "x"}]),
@@ -171,9 +171,10 @@ class TestUsage:
                                    '2026-11-16T10:40:00+00:00')""")
         _expose(db, used, at=datetime(2026, 11, 16, 10, 5, tzinfo=timezone.utc))
 
+        usage.sync(db, log)  # session capture permits deferred exact binding
         m = usage.measures(db, "guru")["miss_rate"]
-        assert (m["recalls"], m["used"], m["missed"], m["empty"], m["unknown"]) == (4, 1, 2, 1, 1)
-        assert m["value"] == round(2 / 3, 3)
+        assert (m["recalls"], m["used"], m["missed"], m["empty"], m["unknown"]) == (4, 1, 1, 1, 2)
+        assert m["value"] == round(1 / 2, 3)
 
         d = usage.measures(db, "guru")["dead_weight"]
         assert (d["standing"], d["never_retrieved"]) == (2, 0)

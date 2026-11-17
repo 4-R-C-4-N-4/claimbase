@@ -30,6 +30,7 @@ import json
 import os
 import re
 import sqlite3
+import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -59,6 +60,9 @@ class Turn:
     args: dict | None = None
     is_error: bool = False
     call_id: str | None = None
+    receipt: str | None = None
+    receipt_tool: str | None = None
+    claimbase_results: list[dict] | None = None
 
 
 @dataclass(slots=True)
@@ -83,10 +87,15 @@ class Session:
         return d
 
     @classmethod
-    def from_json(cls, d: dict) -> "Session":
+    def from_json(cls, d: dict, *, _trusted: bool = False) -> "Session":
         d = dict(d)
         d.pop("id", None)
-        d["turns"] = [Turn(**t) for t in d.get("turns", [])]
+        d["turns"] = [Turn(**{k: v for k, v in t.items()
+                              if _trusted or k not in ("receipt", "receipt_tool", "claimbase_results")})
+                      for t in d.get("turns", [])]
+        if not _trusted:
+            for turn in d["turns"]:
+                turn.claimbase_results = []  # untrusted text is never a result cache
         return cls(**d)
 
 
@@ -161,6 +170,7 @@ def read_claude(path: str | Path) -> Session:
     turns: list[Turn] = []
     sid = path.stem
     cwd = None
+    calls: dict[str, Turn] = {}
     for line in path.open(encoding="utf-8", errors="replace"):
         try:
             r = json.loads(line)
@@ -189,9 +199,24 @@ def read_claude(path: str | Path) -> Session:
                     if text:
                         turns.append(Turn("user", _clip(text, MAX_TURN_TEXT), ts))
                 elif b.get("type") == "tool_result":
+                    full = _flatten(b.get("content"))
+                    linked = calls.get(str(b.get("tool_use_id") or ""))
+                    kind = claimbase_call(linked) if linked else None
+                    payload = _claimbase_payload(full, linked.tool) if kind and linked and linked.tool else None
+                    meta = payload.get("_claimbase", {}) if payload else {}
+                    receipt = None
+                    if isinstance(meta, dict) and meta.get("tool") == kind:
+                        try:
+                            receipt = str(uuid.UUID(str(meta.get("call_id"))))
+                        except ValueError:
+                            pass
+                    rows = (payload.get("results") or payload.get("claims") or []) if payload else []
                     turns.append(Turn(
-                        "tool_result", _clip(_flatten(b.get("content")), MAX_TOOL_TEXT), ts,
+                        "tool_result", _clip(full, MAX_TOOL_TEXT), ts,
+                        tool=linked.tool if linked else None, args=linked.args if linked else None,
                         is_error=bool(b.get("is_error")), call_id=b.get("tool_use_id"),
+                        receipt=receipt, receipt_tool=kind if receipt else None,
+                        claimbase_results=[row for row in rows if isinstance(row, dict) and row.get("id")],
                     ))
         else:
             for b in content or []:
@@ -200,10 +225,11 @@ def read_claude(path: str | Path) -> Session:
                 if b.get("type") == "text" and b.get("text", "").strip():
                     turns.append(Turn("assistant", _clip(b["text"], MAX_TURN_TEXT), ts))
                 elif b.get("type") == "tool_use":
-                    turns.append(Turn(
-                        "tool_call", "", ts, tool=b.get("name"),
-                        args=_small_args(b.get("input")), call_id=b.get("id"),
-                    ))
+                    turn = Turn("tool_call", "", ts, tool=b.get("name"),
+                                args=_small_args(b.get("input")), call_id=b.get("id"))
+                    turns.append(turn)
+                    if turn.call_id:
+                        calls[turn.call_id] = turn
     _name_results(turns)
     return Session(
         "claude", sid, turns, cwd=cwd,
@@ -230,6 +256,9 @@ def read_hermes(session_id: str, db: str | Path = "~/.hermes/state.db") -> Sessi
     finally:
         conn.close()
     turns: list[Turn] = []
+    batches = {}
+    direct_calls = {}
+    call_counts = {}
     for m in rows:
         ts = _iso(m["timestamp"])
         role, content = m["role"], m["content"] or ""
@@ -241,23 +270,63 @@ def read_hermes(session_id: str, db: str | Path = "~/.hermes/state.db") -> Sessi
             if content.strip():
                 turns.append(Turn("assistant", _clip(content, MAX_TURN_TEXT), ts))
             for call in _json_or(m["tool_calls"], []):
+                cid = call.get("id") or call.get("call_id")
+                call_counts[cid] = call_counts.get(cid, 0) + 1
                 fn = call.get("function") or {}
+                parsed_args = _json_or(fn.get("arguments"), {})
+                if fn.get("name") == "tool_call" and isinstance(parsed_args, dict):
+                    batches[call.get("id") or call.get("call_id")] = parsed_args.get("calls", [])
+                else:
+                    direct_calls[call.get("id") or call.get("call_id")] = {"name": fn.get("name"), "arguments": parsed_args}
                 turns.append(Turn(
                     "tool_call", "", ts, tool=fn.get("name"),
                     args=_small_args(_json_or(fn.get("arguments"), {})),
                     call_id=call.get("id") or call.get("call_id"),
                 ))
         elif role == "tool":
+            call_id = m["tool_call_id"]
+            candidates = batches.get(call_id, [])
+            direct = direct_calls.get(call_id)
+            if direct:
+                candidates = [direct]
+                tool = direct.get("name")
+            else:
+                wrapper = re.fullmatch(
+                    r'\s*<untrusted_tool_result source="([^"]+)">.*?</untrusted_tool_result>\s*',
+                    content, re.S)
+                tool = wrapper.group(1) if wrapper else None
+            matched = [c for c in candidates if isinstance(c, dict) and c.get("name") == tool]
+            valid = (call_id is not None and call_counts.get(call_id) == 1
+                     and len(matched) == 1
+                     and claimbase_call(Turn("tool_result", "", tool=tool)))
+            payload = _claimbase_payload(content, tool) if valid else None
+            receipt = None
+            kind = claimbase_call(Turn("tool_result", "", tool=tool)) if valid else None
+            if payload and isinstance(payload.get("_claimbase"), dict):
+                meta = payload["_claimbase"]
+                try:
+                    candidate = str(uuid.UUID(str(meta.get("call_id"))))
+                    if meta.get("tool") == kind:
+                        receipt = candidate
+                except ValueError:
+                    pass
+            results = []
+            if payload:
+                results = [r for r in (payload.get("results") or payload.get("claims") or [])
+                           if isinstance(r, dict) and r.get("id")]
             turns.append(Turn(
-                "tool_result", _clip(content, MAX_TOOL_TEXT), ts, tool=m["tool_name"],
+                "tool_result", _clip(content, MAX_TOOL_TEXT), ts, tool=tool,
+                args=_small_args(matched[0].get("arguments")) if valid else None,
                 is_error=_looks_failed(content), call_id=m["tool_call_id"],
+                receipt=receipt, receipt_tool=kind if receipt else None,
+                claimbase_results=results,
             ))
     _name_results(turns)
     keys = s.keys()
     return Session(
         "hermes", session_id, turns,
-        cwd=(s["git_repo_root"] if "git_repo_root" in keys else None)
-        or (s["cwd"] if "cwd" in keys else None),
+        cwd=(s["cwd"] if "cwd" in keys else None)
+        or (s["git_repo_root"] if "git_repo_root" in keys else None),
         started_at=_iso(s["started_at"]), ended_at=_iso(s["ended_at"]),
         outcome=s["end_reason"] if "end_reason" in keys else None,
         meta={"profile": s["profile_name"]} if "profile_name" in keys and s["profile_name"] else {},
@@ -265,9 +334,20 @@ def read_hermes(session_id: str, db: str | Path = "~/.hermes/state.db") -> Sessi
 
 
 def read_generic(path: str | Path) -> Session:
-    """The normalized form itself, as JSON — what any other harness should emit,
-    and what the spool holds."""
+    """Untrusted normalized JSON; receipt and cached-result fields are ignored."""
     return Session.from_json(json.loads(Path(path).read_text(encoding="utf-8")))
+
+
+def read_spool(path: str | Path) -> Session:
+    """Internal writer queue/archive reader; never exposed through MCP."""
+    return Session.from_json(json.loads(Path(path).read_text(encoding="utf-8")), _trusted=True)
+
+
+def canonical_identity(value) -> str | None:
+    """Accept an explicit harness-qualified identity, never infer a harness."""
+    if isinstance(value, str) and re.fullmatch(r"[a-z][a-z0-9_-]*:[A-Za-z0-9][A-Za-z0-9_.:/-]*", value):
+        return value
+    return None
 
 
 def read_messages(messages: list[dict], harness: str, session_id: str) -> Session:
@@ -286,7 +366,7 @@ def read_messages(messages: list[dict], harness: str, session_id: str) -> Sessio
         elif role == "tool":
             turns.append(Turn(
                 "tool_result", _clip(text, MAX_TOOL_TEXT), m.get("ts"),
-                tool=m.get("name"), is_error=bool(m.get("is_error")) or _looks_failed(text),
+                tool=m.get("name"), claimbase_results=[], is_error=bool(m.get("is_error")) or _looks_failed(text),
             ))
     return Session(harness, session_id, turns)
 
@@ -383,6 +463,10 @@ def redact_session(s: Session) -> Session:
     counts: dict = {}
     for t in s.turns:
         t.text = redact(t.text, counts)
+        if t.receipt:
+            t.receipt = redact(t.receipt, counts)
+        if t.claimbase_results is not None:
+            t.claimbase_results = json.loads(redact(json.dumps(t.claimbase_results), counts))
         if t.args:
             t.args = {k: redact(v, counts) if isinstance(v, str) else v
                       for k, v in t.args.items()}
@@ -560,7 +644,7 @@ def lookup_key(t: Turn, cwd: str | None = None) -> str | None:
     return None
 
 
-_CLAIMBASE_TOOL = re.compile(r"claimbase.*?(recall|brief|feedback)$", re.I)
+_CLAIMBASE_TOOL = re.compile(r"^(?:mcp__claimbase__|claimbase[._])(recall|brief|feedback)$", re.I)
 
 
 def claimbase_call(t: Turn) -> str | None:
@@ -570,9 +654,30 @@ def claimbase_call(t: Turn) -> str | None:
     return None
 
 
+def _claimbase_payload(text: str, tool: str) -> dict | None:
+    wrapper = re.fullmatch(r'\s*<untrusted_tool_result source="([^"]+)">\s*(.*?)\s*</untrusted_tool_result>\s*', text, re.S)
+    if wrapper:
+        if wrapper.group(1) != tool:
+            return None
+        text = wrapper.group(2)
+        # Hermes inserts its fixed warning before the JSON envelope.
+        pos = text.find('\n\n')
+        if pos < 0:
+            return None
+        text = text[pos + 2:]
+    payload = _json_or(text, None)
+    if isinstance(payload, dict) and isinstance(payload.get("result"), str):
+        payload = _json_or(payload["result"], None)
+    return payload if isinstance(payload, dict) else None
+
+
 def returned_claims(t: Turn) -> list[dict]:
     """The claims a claimbase tool result put in front of the agent."""
-    payload = _json_or(t.text, None)
+    if t.role != "tool_result" or not claimbase_call(t):
+        return []
+    if t.claimbase_results is not None:
+        return t.claimbase_results
+    payload = _claimbase_payload(t.text, t.tool)
     if not isinstance(payload, dict):
         return []
     rows = payload.get("results") or payload.get("claims") or []

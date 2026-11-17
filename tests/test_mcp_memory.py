@@ -85,6 +85,7 @@ def test_feedback_writes_no_row_and_still_counts(server, db):
     assert server._dispatch("feedback", {"kind": "great"})["error"]
     assert server._dispatch("feedback", {"kind": "helpful"})["error"]
     out = server._dispatch("feedback", {"kind": "helpful", "claim_id": cid[:8]})
+    assert out.pop("_claimbase")["tool"] == "feedback"
     assert out == {"recorded": "helpful", "claim_id": cid}
     server._dispatch("feedback", {"kind": "missed", "note": "the GPU release rule"})
 
@@ -97,7 +98,7 @@ def test_feedback_writes_no_row_and_still_counts(server, db):
         cur.execute("SELECT kind, claim_id::text, note FROM feedback ORDER BY ts")
         assert cur.fetchall() == [("helpful", cid, None), ("missed", None, "the GPU release rule")]
         cur.execute("SELECT kind FROM exposures WHERE claim_id = %s", (cid,))
-        assert cur.fetchall() == [("used",)]
+        assert cur.fetchall() == [], "unqualified process sessions cannot establish use"
 
 
 def test_submit_session_queues_redacted_and_keeps_the_transcript_out_of_the_log(server, db):
@@ -148,7 +149,9 @@ def test_stats_carries_the_measures_and_the_exception_report(server, db):
 
 
 def test_inspect_reports_a_bad_id_instead_of_raising(server, db):
-    assert server._dispatch("inspect", {"claim_id": "deadbeef"}) == {"error": "no claim deadbeef"}
+    out = server._dispatch("inspect", {"claim_id": "deadbeef"})
+    assert out.pop("_claimbase")["tool"] == "inspect"
+    assert out == {"error": "no claim deadbeef"}
 
 
 # --- over the wire -----------------------------------------------------------
@@ -237,7 +240,8 @@ def test_brief_hook_injects_once_and_logs_under_the_harness_session(
     assert _hook(monkeypatch, capsys, later, "--project", "sandbox") == ""
 
     rec = _lines(server)
-    assert len(rec) == 1 and rec[0]["tool"] == "brief" and rec[0]["session"] == "h-1"
+    assert len(rec) == 1 and rec[0]["tool"] == "brief" and rec[0]["canonical_session"] == "hermes:h-1"
+    assert rec[0]["session"] == server.SESSION
     assert rec[0]["response"]["claims"][0]["id"] == cid
 
 

@@ -5,23 +5,12 @@ The query log (`logs/mcp-queries.jsonl`) has recorded every MCP call since
 database through a role that cannot write. `sync()` derives tables from it,
 idempotently, so the measures are SQL.
 
-Six always-on measures (RFC, Analytics):
+Reports distinguish delivery, lexical inference, explicit feedback, and
+independent checker outcomes. A checker result does not establish causal memory
+use. Nonempty recalls without evidence are unknown; empty results and explicit
+negative feedback can establish a miss. Temporal claim attribution remains an
+inference until exact retrieval/session identity is available.
 
-    miss rate           recalls that returned nothing the session used
-    dead weight         standing claims never retrieved
-    yield per trigger   claims used / claims collected, per collection trigger
-    leak rate           recalls that returned another project's claim unasked
-    repeat corrections  corrections on something the store already held
-    revert rate         merged PRs later undone
-
-and one exception report, which is the only thing a person is asked to read.
-
-**Read the measures with their denominators.** Attribution is the hard part:
-"returned" is a fact, "used" is an inference (lexical overlap between a
-returned claim and what the session did next, or explicit feedback). Every
-number that depends on use says how many recalls could be judged at all, and
-a recall with no submitted session behind it is reported as unknown rather
-than counted as a miss.
 """
 
 from __future__ import annotations
@@ -76,6 +65,12 @@ def sync(conn, log_path: str | Path) -> dict:
                 n["bad"] += 1
                 continue
             lid = _line_id(line)
+            try:
+                receipt = str(uuid.UUID(str(rec.get("call_id")))) if rec.get("call_id") else None
+            except ValueError:
+                receipt = None
+            from .sessions import canonical_identity
+            canonical = canonical_identity(rec.get("canonical_session"))
             args = rec.get("args") or {}
             resp = rec.get("response")
             # The server was hard-wired to one project before `project` existed.
@@ -93,31 +88,23 @@ def sync(conn, log_path: str | Path) -> dict:
                 if isinstance(resp, dict) and resp.get("error"):
                     continue  # a rejected call recorded nothing
                 cur.execute(
-                    """INSERT INTO feedback (id, ts, claim_id, kind, session, client, corpus, note)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                    """INSERT INTO feedback (id, ts, claim_id, kind, session, client, corpus, note, call_id, declared_session)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
                     (lid, ts, claim, args.get("kind"), rec.get("session"),
-                     rec.get("client"), corpus, args.get("note")),
+                     rec.get("client"), corpus, args.get("note"), receipt, canonical),
                 )
                 if cur.rowcount:
                     n["feedback"] += 1
-                    # Explicit beats inferred: "helpful" is a use, on the record.
-                    if args.get("kind") == "helpful" and claim:
-                        cur.execute(
-                            """INSERT INTO exposures (claim_id, kind, session_id, at, via, dedupe)
-                               SELECT id, 'used', %s, %s, 'feedback', %s FROM claims WHERE id = %s
-                               ON CONFLICT DO NOTHING""",
-                            (rec.get("session"), ts, f"feedback:{lid}", claim),
-                        )
                 continue
 
             rows = _results(resp) if tool in _READS else []
             cur.execute(
                 """INSERT INTO retrieval_log (id, ts, client, session, corpus, tool, query,
-                                              n_results, ms, error)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                                              n_results, ms, error, call_id, declared_session)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
                 (lid, ts, rec.get("client"), rec.get("session"), corpus, tool,
                  args.get("query") or args.get("subject"), len(rows), rec.get("ms"),
-                 rec.get("error")),
+                 rec.get("error"), receipt, canonical),
             )
             if not cur.rowcount:
                 continue
@@ -145,11 +132,98 @@ def sync(conn, log_path: str | Path) -> dict:
                     (lid, cid, rank, ccorpus),
                 )
                 n["hits"] += cur.rowcount
+    resolve_receipts(conn)
     return n
+
+
+def resolve_receipts(conn):
+    """Bind only unique, project- and tool-matched logged receipts."""
+    with conn.cursor() as cur:
+        for table, tool_predicate in (("retrieval_log", "l.tool = b.tool"), ("feedback", "b.tool = 'feedback'")):
+            cur.execute(f"UPDATE {table} SET canonical_session = NULL")
+            cur.execute(f"""UPDATE {table} l SET canonical_session = s.id
+                FROM sessions s WHERE l.declared_session = s.id AND l.corpus = s.corpus
+                AND s.id ~ '^[a-z][a-z0-9_-]*:[A-Za-z0-9][A-Za-z0-9_.:/-]*$'
+                AND (l.call_id IS NULL OR NOT EXISTS
+                    (SELECT 1 FROM session_receipts b WHERE b.call_id = l.call_id))
+                AND (l.call_id IS NULL OR
+                    (SELECT count(*) FROM retrieval_log r WHERE r.call_id = l.call_id) +
+                    (SELECT count(*) FROM feedback f WHERE f.call_id = l.call_id) = 1)""")
+            cur.execute(f"""UPDATE {table} l SET canonical_session = b.session_id
+                FROM session_receipts b JOIN sessions s ON s.id = b.session_id AND s.corpus = b.corpus
+                WHERE l.call_id = b.call_id AND l.corpus = b.corpus AND {tool_predicate}
+                  AND NOT b.conflicted
+                  AND (l.declared_session IS NULL OR l.declared_session = b.session_id)
+                  AND (SELECT count(*) FROM retrieval_log r WHERE r.call_id = b.call_id) +
+                      (SELECT count(*) FROM feedback f WHERE f.call_id = b.call_id) = 1""")
+        replacement = """SELECT l.id FROM retrieval_log l
+            JOIN retrieval_hits h ON h.log_id = l.id
+            WHERE h.claim_id = x.claim_id AND l.canonical_session = x.session_id
+              AND l.tool IN ('brief', 'recall') AND l.error IS NULL
+            ORDER BY l.ts, l.id LIMIT 1"""
+        cur.execute(f"""UPDATE exposures x SET source_log = ({replacement})
+            WHERE x.via = 'writer' AND x.source_log IS NOT NULL
+              AND NOT EXISTS (SELECT 1 FROM retrieval_log original
+                  WHERE original.id = x.source_log AND original.canonical_session = x.session_id)
+              AND EXISTS ({replacement})""")
+        cur.execute("""DELETE FROM exposures x WHERE x.via = 'writer' AND x.source_log IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM retrieval_log l WHERE l.id = x.source_log
+                AND l.canonical_session = x.session_id)""")
+        cur.execute("""DELETE FROM exposures x WHERE x.via = 'feedback'
+            AND NOT EXISTS (SELECT 1 FROM feedback f WHERE 'feedback:' || f.id::text = x.dedupe
+                AND f.canonical_session = x.session_id)""")
+        cur.execute("""INSERT INTO exposures (claim_id, kind, session_id, at, via, dedupe)
+            SELECT c.id, 'used', f.canonical_session, f.ts, 'feedback', 'feedback:' || f.id::text
+              FROM feedback f JOIN claims c ON c.id = f.claim_id
+             WHERE f.kind = 'helpful' AND f.canonical_session IS NOT NULL AND c.corpus = f.corpus
+            ON CONFLICT DO NOTHING""")
 
 
 def _ratio(a: int, b: int) -> float | None:
     return round(a / b, 3) if b else None
+
+
+def record_outcome(conn, project: str, session: str, run: str, checker: str,
+                   passed: bool, evidence) -> dict:
+    """Record an independent checker result without attributing claim use."""
+    if any(not isinstance(x, str) or not x.strip() for x in (project, session, run, checker)):
+        raise ValueError("project, session, run and checker must be nonempty strings")
+    if type(passed) is not bool:
+        raise ValueError("passed must be a boolean")
+    def validate_text(value):
+        if isinstance(value, str):
+            if "\x00" in value:
+                raise ValueError("evidence cannot contain null characters")
+            value.encode("utf-8")  # PostgreSQL also rejects unpaired surrogates.
+        elif isinstance(value, dict):
+            for key, child in value.items():
+                validate_text(key)
+                validate_text(child)
+        elif isinstance(value, (list, tuple)):
+            for child in value:
+                validate_text(child)
+
+    try:
+        encoded = json.dumps(evidence, allow_nan=False)
+        validate_text(evidence)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("evidence must be PostgreSQL-compatible JSON") from exc
+    with conn.cursor() as cur:
+        cur.execute("SELECT corpus FROM sessions WHERE id = %s", (session,))
+        row = cur.fetchone()
+        if row is None or row[0] != project:
+            raise ValueError("session missing or project mismatch")
+        cur.execute("""INSERT INTO usage_outcomes (session_id, corpus, run_id, checker, passed, evidence)
+                       VALUES (%s,%s,%s,%s,%s,%s::jsonb) ON CONFLICT DO NOTHING
+                       RETURNING session_id""", (session, project, run, checker, passed, encoded))
+        inserted = cur.fetchone() is not None
+        cur.execute("""SELECT passed, evidence FROM usage_outcomes
+                       WHERE run_id=%s AND checker=%s AND session_id=%s""", (run, checker, session))
+        stored_passed, stored_evidence = cur.fetchone()
+        if not inserted and (stored_passed != passed or stored_evidence != json.loads(encoded)):
+            raise ValueError("outcome key already exists with different result")
+    return {"project": project, "session": session, "run": run, "checker": checker,
+            "passed": passed, "evidence": stored_evidence}
 
 
 def measures(conn, project: str, since: datetime | None = None) -> dict:
@@ -161,22 +235,19 @@ def measures(conn, project: str, since: datetime | None = None) -> dict:
         cur.execute(
             """
             WITH r AS (
-              SELECT l.id, l.ts, l.n_results, l.session,
+              SELECT l.id, l.ts, l.n_results, l.canonical_session,
                 EXISTS (
                   SELECT 1 FROM retrieval_hits h JOIN exposures x ON x.claim_id = h.claim_id
                    WHERE h.log_id = l.id AND x.kind = 'used'
-                     AND x.at >= l.ts - interval '1 minute' AND x.at <= l.ts + %(win)s
+                     AND x.via = 'writer' AND x.session_id = l.canonical_session AND x.at >= l.ts - interval '1 minute' AND x.at <= l.ts + %(win)s
                 ) AS used,
                 EXISTS (
-                  SELECT 1 FROM sessions s
-                   WHERE s.started_at <= l.ts
-                     AND coalesce(s.ended_at, s.started_at) + interval '5 minutes' >= l.ts
-                     AND (s.corpus = l.corpus OR s.corpus IS NULL)
-                ) AS covered,
-                EXISTS (
                   SELECT 1 FROM feedback f
-                   WHERE f.session = l.session AND f.ts >= l.ts
+                   WHERE f.canonical_session = l.canonical_session AND f.corpus = l.corpus AND f.ts >= l.ts
                      AND f.kind IN ('not_helpful', 'missed')
+                     AND (f.claim_id IS NULL OR EXISTS (
+                       SELECT 1 FROM retrieval_hits fh
+                        WHERE fh.log_id = l.id AND fh.claim_id = f.claim_id))
                 ) AS flagged
               FROM retrieval_log l
               WHERE l.tool = 'recall' AND l.error IS NULL
@@ -185,7 +256,7 @@ def measures(conn, project: str, since: datetime | None = None) -> dict:
             SELECT count(*),
                    count(*) FILTER (WHERE used),
                    count(*) FILTER (WHERE n_results = 0),
-                   count(*) FILTER (WHERE NOT used AND (n_results = 0 OR covered OR flagged))
+                   count(*) FILTER (WHERE NOT used AND (n_results = 0 OR flagged))
             FROM r
             """,
             {"p": project, "since": since, "win": USE_WINDOW},
@@ -195,8 +266,33 @@ def measures(conn, project: str, since: datetime | None = None) -> dict:
         out["miss_rate"] = {
             "value": _ratio(missed, judged), "recalls": total, "used": used,
             "missed": missed, "empty": empty, "unknown": total - judged,
-            "reads": "missed / (used + missed); unknown = no session or feedback to judge by",
+            "inferred": used, "reads": "missed / (inferred + missed); other recalls are unknown",
         }
+
+        cur.execute("""SELECT count(*), coalesce(sum(n_results), 0),
+                              (SELECT count(*) FROM retrieval_hits h JOIN retrieval_log r ON r.id=h.log_id
+                               WHERE r.corpus=%s AND r.ts >= %s AND r.tool IN ('recall','brief','timeline') AND r.error IS NULL)
+                       FROM retrieval_log WHERE corpus=%s AND ts >= %s
+                         AND tool IN ('recall','brief','timeline') AND error IS NULL""", (project, since, project, since))
+        calls, results, hits = cur.fetchone()
+        out["delivery"] = {"retrievals": calls, "results": results, "claim_hits": hits}
+        cur.execute("SELECT kind, count(*) FROM feedback WHERE corpus=%s AND ts >= %s GROUP BY kind", (project, since))
+        out["feedback"] = dict(cur.fetchall())
+        cur.execute("""SELECT count(DISTINCT (x.claim_id, x.session_id)),
+                              count(DISTINCT x.session_id)
+                         FROM exposures x JOIN sessions s ON s.id = x.session_id
+                        WHERE x.kind = 'used' AND x.via = 'writer'
+                          AND s.corpus = %s AND x.at >= %s""", (project, since))
+        inferred, inferred_sessions = cur.fetchone()
+        out["inference"] = {"claim_uses": inferred, "sessions": inferred_sessions,
+                            "reads": "weak transcript inference, not verified causal use"}
+        cur.execute("""SELECT session_id, run_id, checker, passed, evidence FROM usage_outcomes
+                       WHERE corpus=%s AND recorded_at >= %s ORDER BY recorded_at, session_id, run_id, checker""", (project, since))
+        rows = cur.fetchall()
+        out["outcomes"] = {"passed": sum(r[3] for r in rows), "failed": sum(not r[3] for r in rows),
+                           "records": [{"session": a, "run": b, "checker": c, "passed": d, "evidence": e}
+                                       for a, b, c, d, e in rows],
+                           "reads": "independent checks; outcomes do not establish causal memory use"}
 
         # --- dead weight -------------------------------------------------------
         cur.execute(
@@ -221,14 +317,14 @@ def measures(conn, project: str, since: datetime | None = None) -> dict:
                       count(t.claim_id),
                       count(*) FILTER (WHERE EXISTS (
                           SELECT 1 FROM exposures x
-                           WHERE x.claim_id = t.claim_id AND x.kind = 'used'))
+                           WHERE x.claim_id = t.claim_id AND x.kind = 'used' AND x.via = 'writer'))
                  FROM triggers t
                 WHERE t.corpus = ANY(%s)
                 GROUP BY t.type ORDER BY 2 DESC""",
             (scopes,),
         )
         out["yield_per_trigger"] = {
-            typ: {"triggers": n, "scored": scored, "claims": claims, "used": u,
+            typ: {"triggers": n, "scored": scored, "claims": claims, "used": u, "inferred": u,
                   "yield": _ratio(u, claims)}
             for typ, n, scored, claims, u in cur.fetchall()
         }
@@ -343,7 +439,7 @@ def exception_report(conn, project: str, days: int = 14) -> dict:
                   AND l.query IS NOT NULL
                   AND (l.n_results = 0 OR EXISTS (
                         SELECT 1 FROM feedback f
-                         WHERE f.session = l.session AND f.kind = 'missed'
+                         WHERE f.canonical_session = l.canonical_session AND f.corpus = l.corpus AND f.kind = 'missed'
                            AND f.ts BETWEEN l.ts AND l.ts + interval '30 minutes'))
                 GROUP BY 1 HAVING count(*) >= 2 ORDER BY 2 DESC LIMIT 25""",
             (project, since),

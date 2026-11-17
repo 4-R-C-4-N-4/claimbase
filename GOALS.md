@@ -45,7 +45,7 @@ findings.md, 2026-11-16.
 | G5 | Usage is measured from the first day | query log carries claim ids + session + project; `usage sync` → `retrieval_log`, `exposures`; six measures | built |
 | G6 | Projects never conflate | project ≡ `corpus`, on every row since 001; MCP takes `project`; cross-project PRs refused | built |
 | G7 | Inspectable and correctable by hand | `inspect`, `pr open`, `pr revert`, `brief`, `report` on the CLI | built |
-| G8 | One machine, local models, no hosted dependency | unchanged; the writer's judge is a local model behind `llm.py` | built, judge unvalidated |
+| G8 | One machine, local models, no hosted dependency | unchanged; the writer's judge is a local model behind `llm.py` | built; Bonsai sandbox exercised, real-session judge unvalidated |
 | G9 | The design admits a shared scope without a rewrite | not started — see §5 | open |
 
 Non-goals carry over unchanged: not a replacement for docs/linters/config, no
@@ -128,7 +128,8 @@ Write path:
 Measures (`claimbase usage report`, `stats`): miss rate, dead weight, yield per
 trigger, leak rate, repeat corrections, revert rate.
 
-Schema: `migrations/008_memory.sql` — additive only.
+Schema: additive migrations `008_memory.sql`, `009_outcomes.sql`, and
+`010_session_attribution.sql`. The new migrations were exercised only on scratch stores.
 
 ---
 
@@ -137,9 +138,9 @@ Schema: `migrations/008_memory.sql` — additive only.
 | Gate | Holder | Why it is a gate |
 |---|---|---|
 | Bring `claimbase-db` back up | owner | It was stopped, not broken; restarting it also revives the nightly cron compile. |
-| Apply migration 008 to the live store | owner | Additive, but it is the live store. `scripts/backup_db.sh pre-008` first. |
+| Apply memory migrations 008–010 to the live store | owner | Additive, but it is the live store. Back up and inspect the exact migration set first; sandbox approval is not live-migration approval. |
 | First compile after merge | owner | Decision 11 re-keys every adapter-derived claim once. Compare `store_fingerprint` before and after; the gold scoreboard must not move. |
-| Validate the writer's judge on real sessions | owner (GPU) | The judge prompt has only been exercised with a scripted stand-in. Run `claimbase replay` with a local model and read the yield. |
+| Validate the writer's judge on real sessions | owner (GPU) | Local Bonsai passed the synthetic sandbox, not representative real-session judgement. Run the capture-only shadow evaluation/replay and audit retention against source evidence. |
 | Wire one harness for daily use | owner | The actual phase-1 gate. Claude Code: MCP entry + a `SessionEnd` hook calling `claimbase submit-session`. See MCP.md. |
 | Point hermes at this branch | owner | Profiles load `src/` from the main checkout; the branch lives in a separate worktree so the fleet is not running unreviewed code. |
 
@@ -163,13 +164,25 @@ itself.
 
 ## 6. Known holes
 
+- **Integrated review blocks merge.** The local-scope lexical guard still
+  misses wording such as "for this specific project"; it can widen a local
+  preference to `self`. Session-matched recall logs can also credit text from
+  before delivery as inferred use. Both were reproduced before publication.
+  Keep the PR draft until repaired, re-reviewed and affected evidence rerun.
 - **Re-extraction resurrects amended claims.** An extractor-version bump
   rebuilds extracted claims wholesale; a PR that superseded one of them is not
   replayed. PRs need to be re-applied after extraction the way captured
   asserts already are (`rebuild_captured`).
-- **"Used" is inferred.** A returned claim counts as used when the session's
-  later text overlaps it lexically, or on explicit `feedback`. Every measure
-  built on use inherits that noise.
+- **Causal use remains unproven.** Reports now separate logged delivery,
+  weak inferred use, explicit feedback and independent task outcomes. The
+  earlier three-rule sandbox followed rules with zero lexical-use signals;
+  the lexical threshold was not tuned to those examples. A passing artifact
+  does not prove which claim caused it; no lexical match remains unknown.
+- **Legacy attribution can remain unknown.** New attribution uses exact,
+  harness-qualified session identities or structurally captured per-call
+  receipts. Ambiguous, duplicate or conflicting receipts fail closed rather
+  than guessing by project and time. This does not retroactively resolve
+  unidentified historical traffic.
 - **Correction detection is a heuristic** over user turns. It is a trigger
   selector, not a classifier; the rule that fired is recorded on each episode
   so yield per rule can be measured and bad rules dropped. Calibrated once, by
@@ -181,3 +194,25 @@ itself.
   chosen by argument.
 - **Revert rate undercounts.** A wrong merge nobody notices looks like a safe
   one. The measure is a floor.
+
+## 7. Hermes sandbox gate (2026-11-16)
+
+**Executed:** local Ternary-Bonsai-2-27B as agent and judge, 65,536-token
+context on the 3090. Expanded set: **2/9 task checks without memory, 9/9
+with memory**, with **9/9 collection checks**. Three fresh four-scenario
+subset trials: **1/12 without memory, 12/12 with memory and collection**.
+Zero execution errors. The separate changed-rule smoke also passed and is
+not pooled into those denominators. Hermes's built-in memory was disabled.
+
+The real runs exposed and corrected scope widening, unavailable filesystem
+operations, suppressed capability guidance, dependency-cache disk growth and
+chat-lifetime coupling. Both arms now receive identical confined rename/delete
+tools; no shell or memory-writing tools were added. Failed/contaminated runs
+remain separate. See the [sandbox notes](docs/evaluation/hermes-bonsai-sandbox-2026-11-16.md)
+and [portable evidence](eval/evidence/2026-11-16-hermes-bonsai.json).
+
+This verifies **synthetic sandbox execution**, not any owner gate in §4 or
+causal use of a particular claim. Next: integrated Phase 3 review, retrieval
+pressure, then capture-only real-project shadow evaluation. The judge still
+needs representative real-session validation and daily use still needs a week
+of evidence. No live store or normal Hermes profile was changed.

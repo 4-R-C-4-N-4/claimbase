@@ -201,6 +201,7 @@ class TestProjects:
 
     def test_no_repo_is_the_user_scope(self, monkeypatch, tmp_path):
         monkeypatch.setattr(projects, "declared", lambda: {})
+        monkeypatch.setattr(projects, "_git_root", lambda path: None)
         assert projects.resolve(cwd=tmp_path) == "self"
         assert projects.resolve() == "self"
 

@@ -64,7 +64,9 @@ case "${1:-up}" in
     # Idempotent: 001 has bare CREATE TABLEs, so only migrate an empty database.
     if [ "$(psql_ -d "$DB" -Atc "SELECT to_regclass('public.events') IS NOT NULL")" = "t" ]; then
       psql_ -d "$DB" < "$ROOT/migrations/008_memory.sql" >/dev/null
-      echo "ok: $DB already migrated; 008 re-applied"
+      psql_ -d "$DB" < "$ROOT/migrations/009_outcomes.sql" >/dev/null
+      psql_ -d "$DB" < "$ROOT/migrations/010_session_attribution.sql" >/dev/null
+      echo "ok: $DB already migrated; 008 through 010 re-applied"
     else
       migrate
     fi

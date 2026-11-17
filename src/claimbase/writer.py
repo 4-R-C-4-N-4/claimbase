@@ -117,9 +117,9 @@ _OBJ = re.compile(r"\{.*\}", re.S)
 
 
 class LocalJudge:
-    """A local model behind `llm.py`. Unvalidated against real sessions as of
-    2026-11-16 — the prompt above has only been exercised through a scripted
-    stand-in. Run `claimbase replay` and read the yield before trusting it."""
+    """A local model behind `llm.py`. Bonsai has exercised the three-rule Hermes
+    sandbox (findings 2026-11-16), not a representative real-session judge eval.
+    Run `claimbase replay` and read the yield before trusting it broadly."""
 
     def __init__(self, provider: str | None = None, model: str | None = None,
                  max_tokens: int | None = None, timeout: float = 300.0) -> None:
@@ -255,6 +255,8 @@ def attribute_uses(s: sessions.Session, shown: list[tuple[str, str]] | None = No
 def ingest(conn, s: sessions.Session) -> dict:
     """Session -> rows. No model. Idempotent: every insert is keyed, so feeding
     the same transcript twice changes nothing. Does not commit."""
+    if not sessions.canonical_identity(s.id):
+        raise ValueError("invalid canonical session identity")
     corpus = s.project or projects.USER_SCOPE
     store = Store(conn)
     sessions._name_results(s.turns)
@@ -269,6 +271,10 @@ def ingest(conn, s: sessions.Session) -> dict:
             (s.id, corpus, s.harness, _ts(s.started_at), _ts(s.ended_at), s.outcome,
              len(s.turns), json.dumps({**s.meta, "cwd": s.cwd})),
         )
+
+        cur.execute("SELECT corpus FROM sessions WHERE id = %s", (s.id,))
+        if cur.fetchone()[0] != corpus:
+            raise ValueError("session project mismatch")
 
         looked = sessions.lookups(s)
         prior: dict[str, int] = {}
@@ -306,26 +312,40 @@ def ingest(conn, s: sessions.Session) -> dict:
                 )
                 n_trig += 1
 
-        # What the query log says this session was shown. Joined on the
-        # harness's own session id, which a hook passes through; the MCP
-        # server's per-process id is carried in the submission's meta.
+        # A receipt is accepted only from a harness-associated tool result.
+        for turn in s.turns:
+            if (turn.role != "tool_result" or not turn.receipt or
+                    not turn.receipt_tool or sessions.claimbase_call(turn) != turn.receipt_tool):
+                continue
+            cur.execute("""INSERT INTO session_receipts (call_id, session_id, corpus, tool)
+                VALUES (%s,%s,%s,%s) ON CONFLICT (call_id) DO UPDATE
+                SET conflicted = session_receipts.conflicted OR
+                    (session_receipts.session_id, session_receipts.corpus, session_receipts.tool)
+                    IS DISTINCT FROM (EXCLUDED.session_id, EXCLUDED.corpus, EXCLUDED.tool)""",
+                (turn.receipt, s.id, corpus, turn.receipt_tool))
+        from . import usage
+        usage.resolve_receipts(conn)
         cur.execute(
-            """SELECT DISTINCT h.claim_id::text, c.content
+            """SELECT DISTINCT h.claim_id::text, c.content, l.id
                  FROM retrieval_log l
                  JOIN retrieval_hits h ON h.log_id = l.id
                  JOIN claims c ON c.id = h.claim_id
-                WHERE l.tool IN ('brief', 'recall') AND l.session = ANY(%s)""",
-            ([x for x in (s.session_id, s.id, s.meta.get("mcp_session")) if x],),
-        )
-        uses = attribute_uses(s, cur.fetchall())
+                WHERE l.tool IN ('brief', 'recall') AND l.corpus = %s
+                  AND l.canonical_session = %s ORDER BY l.id""", (corpus, s.id))
+        shown = cur.fetchall()
+        sources = {cid: log_id for cid, _, log_id in shown}
+        direct = {cid for cid, _, _ in attribute_uses(s)}
+        uses = attribute_uses(s, [(cid, text) for cid, text, _ in shown])
         n_used = 0
         for cid, turn, ts in uses:
             cur.execute(
-                """INSERT INTO exposures (claim_id, kind, session_id, turn, at, via, dedupe)
-                   SELECT id, 'used', %s, %s, coalesce(%s, now()), 'writer', %s
+                """INSERT INTO exposures (claim_id, kind, session_id, turn, at, via, dedupe, source_log)
+                   SELECT id, 'used', %s, %s, coalesce(%s, now()), 'writer', %s, %s
                      FROM claims WHERE id = %s
-                   ON CONFLICT DO NOTHING""",
-                (s.id, turn, _ts(ts), f"session:{s.id}", cid),
+                   ON CONFLICT (claim_id, kind, dedupe) DO UPDATE SET source_log = NULL
+                     WHERE exposures.source_log IS NOT NULL AND EXCLUDED.source_log IS NULL""",
+                (s.id, turn, _ts(ts), f"session:{s.id}",
+                 None if cid in direct else sources.get(cid), cid),
             )
             n_used += cur.rowcount
 
@@ -384,6 +404,27 @@ def _new_claim(conn, cur, *, corpus, eid, text, kind, role, trigger, session_id,
                      "evidence": [str(eid)], **capped.meta})),
     )
     return cid
+
+
+def _claim_corpus(corpus: str, kind: str | None, role: str,
+                  evidence: str, claim: str) -> str:
+    """A model's kind label alone cannot widen a captured project's scope.
+
+    Automatic user-scope preferences require a first-person preference in the
+    actual human episode. Explicit local qualifiers in either the source or
+    distilled claim veto widening. This is deliberately conservative language
+    recognition, not a general semantic scope classifier: uncertain cases stay
+    local, and a session captured explicitly in `self` remains user-scoped.
+    """
+    if corpus == projects.USER_SCOPE or kind != "preference" or role != "user":
+        return corpus
+    local = r"\b(?:(?:this|the|our|current|working) (?:project|repository|repo|codebase)|here)\b"
+    combined = evidence + "\n" + claim
+    if re.search(local, combined, re.I) or re.search(
+            rf"(?<![\w-]){re.escape(corpus)}(?![\w-])", combined, re.I):
+        return corpus
+    personal = r"\b(?:i (?:generally |always )?(?:prefer|like|want)|my preference)\b"
+    return projects.USER_SCOPE if re.search(personal, evidence, re.I) else corpus
 
 
 def score(conn, s: sessions.Session, judge: Judge, now: datetime | None = None) -> dict:
@@ -455,9 +496,8 @@ def score(conn, s: sessions.Session, judge: Judge, now: datetime | None = None) 
 
             elif verdict.claim:
                 relation = "novel"
-                # Preferences are about the person, not the project they were
-                # stated in.
-                dest = projects.USER_SCOPE if verdict.kind == "preference" else corpus
+                # Scope comes from captured evidence, not just a model kind.
+                dest = _claim_corpus(corpus, verdict.kind, role, text, verdict.claim)
                 vec = str(_embed(verdict.claim))
                 dup = _nearest(cur, dest, vec, ("active", "contested"))
                 twin = _nearest(cur, dest, vec, ("tentative",), not_session=s.id)
@@ -505,7 +545,7 @@ def _archived(session_id: str, spool: Path | None = None) -> sessions.Session | 
 
     name = hashlib.sha256(session_id.encode()).hexdigest()[:24] + ".json"
     path = (spool or sessions.SPOOL) / "done" / name
-    return sessions.read_generic(path) if path.exists() else None
+    return sessions.read_spool(path) if path.exists() else None
 
 
 def run(conn, judge: Judge | None = None, spool: Path | None = None,
@@ -521,7 +561,7 @@ def run(conn, judge: Judge | None = None, spool: Path | None = None,
     if limit:
         queue = queue[:limit]
     for path in queue:
-        s = sessions.read_generic(path)
+        s = sessions.read_spool(path)
         r = ingest(conn, s)
         conn.commit()
         sessions.archive(path, spool)
