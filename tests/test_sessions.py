@@ -130,6 +130,38 @@ class TestTriggers:
             eps = self._eps(Turn("user", "go"), Turn("assistant", "ok"), Turn("user", text))
             assert not eps[1].is_trigger, text
 
+    @pytest.mark.parametrize('text', [
+        "The model doesn't have to remember to call anything.",
+        "I remember that allocation failure from yesterday.",
+        "Do you remember which GPU we used?",
+        "The model does not have to\nremember to call anything.",
+        "Do not\nremember this temporary allocation failure.",
+        "Remember the GPU allocation failure yesterday?",
+        "Remember which GPU\nwe used yesterday?",
+        "What happened with the GPU\n\nI tried the 4070. It failed allocating "
+        "the KV cache.\n\nWhat is ready\nThe hooks inject the brief and submit "
+        "the transcript, so the model doesn't have to remember to call anything.",
+    ])
+    def test_descriptive_remember_is_not_a_memory_directive(self, text):
+        eps = self._eps(Turn('user', text))
+        assert eps[0].type == 'user_statement'
+        assert not eps[0].is_trigger
+
+    @pytest.mark.parametrize('text', [
+        "Remember I prefer terse workbook-style docs.",
+        "Please remember that project reports use ISO dates.",
+        "Also keep in mind that deploys require a release tag.",
+        "One more thing. Remember that reports belong in reports/.",
+        "For future sessions, please remember that release reports belong in reports/.",
+        "In future, please remember that release reports belong in reports/.",
+        "- Remember that release reports belong in reports/.",
+        "Project notes:\n- Remember that release reports belong in reports/.",
+    ])
+    def test_direct_memory_instructions_remain_decisions(self, text):
+        eps = self._eps(Turn('user', text))
+        assert eps[0].type == 'decision'
+        assert eps[0].is_trigger
+
     def test_plain_request_is_only_an_episode(self):
         eps = self._eps(Turn("user", "add a retry"), Turn("assistant", "Done."),
                         Turn("user", "thanks, now run the tests"))

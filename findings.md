@@ -3,6 +3,75 @@
 Running record of measured results. The Phase 0 go/no-go verdict lands here too,
 including if it says the claims column lost.
 
+## 2026-11-17 — Retention follow-up revalidated in the expanded sandbox
+
+| Invocation | Checker | Controls (smoke / full / repeated) | Memory task+collection | Errors | phase3_pass |
+|---|---|---|---|---|---|
+| 648944cb… | frozen substring | 0/1, 2/9, 2/12 | 1/1, 9/9, 11/12 | 0 | false |
+| 1a75ea4f… | revised | 0/1, 3/9, 3/12 | 1/1, 9/9, 12/12 | 0 | true |
+
+The first invocation's one failure was a checker false negative: the store held the
+correct supersession, but the active replacement named the rule it retired and the
+check was a substring test for "rpt_". The result stays recorded as a failure. The
+revised check requires the store's own supersession link plus conservative retirement
+wording; reviewer counterexamples are regression tests. In the second invocation the
+same wording pattern recurred once (trial-02) and was accepted by the link. Longer
+judge context may make replacements cite the retired rule more often; 2 of 10
+changed-rule memory replacements did so, which is too few to call a rate.
+
+Small synthetic sandbox; not significance or real-project benefit. Next: Phase 4.
+
+## 2026-11-17 — Self-dogfood retention follow-up: trigger intent and lost context
+
+The original bounded rehearsal used two genuine but partial Claimbase checkpoints,
+109 episodes and 13 triggers. It retained one proposal that generalized a reported
+GPU launch failure into standing capability/context-limit knowledge. It was never
+promoted to live memory. Human-role pasted reports are not necessarily new human
+standing instructions; a descriptive mention of remembering selected this report.
+
+The follow-up restricts remember-style triggers to directive positions, preserves
+direct instructions, handles soft wrapping conservatively and rejects question-form
+remembering. Judge policy explicitly rejects lone error reports without a durable
+corrective rule. These are conservative mitigations, not arbitrary-language proof.
+
+Every candidate re-used the same frozen redacted inputs in a NEW scratch database.
+No recapture, live writes, profile changes or memory injection occurred:
+
+| Candidate | Episodes | Terminal triggers | Proposals | Audit |
+|---|---|---|---|---|
+| First trigger/policy candidate | 109 | 11 | 0 | Direct old-label probe still generalized the past failure; semantic check failed despite zero replay proposals. |
+| Stricter isolated-error policy | 109 | 11 | 1 | Five direct probes passed, but replay overclaimed permanent system-of-record adoption from bounded trial approval. Not promoted. |
+| Same stricter policy, corrected context | 109 | 11 | 0 | Five direct probes passed; all replay triggers terminal, no pending work or scoring failures. |
+
+The second audit exposed a formatter defect: each message was silently cut at 600
+characters, dropping the preceding explanation's bounded shadow-only conditions.
+The corrected context reserves the marked episode and nearby dialogue before tool
+data, renders chronologically, preserves bounded head/tail excerpts with explicit
+truncation and accounts for labels/newlines in its total budget. The actual consent
+context now includes those limits. This is not proof that arbitrary middle or
+out-of-window conditions always survive bounded context, or that one selected
+before/after establishes a causal effect.
+
+The five separate local-Bonsai probes reject the frozen historical error, an
+unrelated export error and a task-only exception; they retain a standing naming
+instruction and an explicit standing corrective rule after an error. Synthetic
+controls never seed the genuine replay store. These are selected regression cases
+after a disclosed failed candidate, not held-out accuracy or useful-memory benefit.
+
+Final isolated-HOME scratch-Postgres gate: 316 passed, 2 skipped, with the live-store
+dependent tests/test_mcp_sandbox.py excluded. Independent code review: spec PASS,
+quality APPROVED, no findings; reviewers did not rerun the parent's model/database
+gate. Exact source snapshots, input/report hashes, rejected candidates and audit
+are retained privately under ~/.local/state/claimbase-shadow/claimbase/retention-fix-1794932048/.
+The original rehearsal remains unchanged. Owned inference and task embeddings were
+stopped/unloaded; model services had explicit 12-GiB RAM limits rather than the
+generic 4-GiB worker ceiling.
+
+This follow-up does not reuse earlier Phase 3 scores as validation of changed
+behavior. Affected expanded-sandbox revalidation is next, then retrieval pressure;
+finalized-session shadow acceptance, continuous capture and live rollout remain
+separate outstanding gates. Code remains local on fix/shadow-retention.
+
 ## 2026-11-16 — Fair local-model rerun completed, including repetitions
 
 Parent verified all raw trial reports, their requested/attempted counts,

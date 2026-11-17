@@ -199,6 +199,48 @@ def check(workdir: Path, checker: str) -> tuple[bool, list[dict]]:
     return bool(assertions) and all(assertions), evidence
 
 
+# Conservative by design: a mention of the retired token passes only in a
+# small set of explicit replacement/prohibition forms, and any exception or
+# conditional anywhere in the claim makes it count as prescribing. Failing a
+# genuine but unusual retirement is acceptable; passing a claim that keeps the
+# old convention in force is not.
+_RETIRING_VERB = (r'(?:(?<!not )(?<!never )(?:instead of|rather than|replac\w*|supersed\w*)|'
+                  r'(?:do not|never|no longer)\s+use)')
+_RETIRED_BEFORE = re.compile(
+    r'\b' + _RETIRING_VERB +
+    r'(?:\s+(?:the|a|an|prior|previous|old|obsolete|former|established|deprecated|existing|retired))*'
+    r'\s+$')
+_RETIRED_AFTER = re.compile(  # "rpt_YYYYMMDD.md (convention) is/has been obsolete."
+    r'^\S*\s+(?:convention\s+|naming\s+rule\s+|rule\s+)?(?:is|are|was|were|has been|have been)\s+'
+    r'(?:now\s+)?(?:obsolete|deprecated|retired|superseded|replaced|no longer used)'
+    r'(?:\s+and\s+(?:should\s+)?no\s+longer\s+(?:be\s+)?used)?\s*$')
+_EXCEPTION = re.compile(r'\b(?:except\w*|unless|only|but|still|remain\w*|continu\w*|'
+                        r'keep|if|when|whenever|where|for (?:final|drafts?|some|certain)|'
+                        r'false|untrue|incorrect|wrong|required|mandatory)\b')
+
+
+def _prescribes(content, token):
+    """Whether a claim states `token` as a current convention rather than
+    naming it only as the retired rule a replacement supersedes.
+
+    Every occurrence must be directly governed by a replacing/prohibiting
+    verb ("replacing the prior obsolete rpt_", "do not use rpt_") or be the
+    subject of an unconditional retirement predicate ending its clause
+    ("rpt_... is obsolete."). Any exception/conditional word in the claim
+    vetoes retirement. Lexical, for this fixture vocabulary only."""
+    text = re.sub(r'[`\'"*]', '', content.lower().replace("don't", 'do not'))
+    if token not in text:
+        return False
+    if _EXCEPTION.search(text):
+        return True
+    for clause in re.split(r'[;,:]|\.(?!\w)', text):
+        at = clause.find(token)
+        while at != -1:
+            if not (_RETIRED_BEFORE.search(clause[:at]) or _RETIRED_AFTER.search(clause[at:])):
+                return True
+            at = clause.find(token, at + 1)
+    return False
+
 def collection_checks(name, project, snapshots, final):
     """Collection/trust assertions are separate from artifact task outcomes.
 
@@ -219,7 +261,15 @@ def collection_checks(name, project, snapshots, final):
         add('all established old claims superseded', ids and all(
             c['status'] == 'superseded' for c in final['claims'] if str(c['id']) in ids))
         add('new standing rule active', matching(own, 'status-'))
-        add('old rule not active', not matching(own, 'rpt_'))
+        # A replacement may name the rule it retires. Tolerate an active
+        # rpt_ mention only when the store itself records this claim as the
+        # supersession of an established old claim, it states the new
+        # status- rule, and its wording retires rpt_ without exception.
+        replacements = {str(c['superseded_by']) for c in final['claims']
+                        if str(c['id']) in ids and c.get('superseded_by')}
+        add('old rule not active', not [c for c in own if 'rpt_' in c['content'].lower() and not (
+            str(c['id']) in replacements and 'status-' in c['content'].lower()
+            and not _prescribes(c['content'], 'rpt_'))])
     elif name == 'one-off-exception':
         add('standing convention established', matching(active(snapshots[0], project), 'rpt_'))
         add('one-off did not become standing', not matching(own, 'exception-'))
