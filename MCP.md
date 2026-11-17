@@ -85,10 +85,13 @@ A harness needs three calls and no memory logic of its own:
 3. **`submit_session`** at session end — or, where the harness has no
    session-end hook, the wrapper: `claimbase submit-session`.
 
-The agent never decides what to remember. A separate writer
+With writes off, the agent never decides what to remember: a separate writer
 (`claimbase writer run`, a batch job that can wait for the GPU) reads the
 submitted transcript and collects only from the moments that mattered. See
-[GOALS.md](docs/GOALS.md).
+[GOALS.md](docs/GOALS.md). With `CLAIMBASE_MCP_WRITE=1` the working model can
+also record what it learns (`assert_claim`, `open_pr`) — the distillation path
+for a frontier model; the agent-facing instructions for that are in
+[docs/AGENT_GUIDE.md](docs/AGENT_GUIDE.md).
 
 ### Claude Code
 
@@ -109,8 +112,12 @@ after its directory; outside any repo is the user scope, `self`.
 ### Hermes
 
 Sessions are SQLite rows, not files: `claimbase submit-session --harness hermes
---session-id <id>`. Whether hermes exposes a session-end hook to call it from
-is unchecked.
+--session-id <id>`. Hermes shell hooks carry both ends; the evaluation sandbox
+(`eval/sandbox_hermes.py`) runs them: `pre_llm_call` → `claimbase hook brief`
+(injects the brief on the first turn only) and `on_session_finalize` →
+`claimbase submit-session --harness hermes --hook`. Without hooks, put the
+[AGENT_GUIDE](docs/AGENT_GUIDE.md) instructions in the profile so the agent
+calls `brief` itself.
 
 ## Tools
 
