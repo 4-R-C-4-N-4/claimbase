@@ -19,6 +19,9 @@ DO $$ BEGIN
 END $$;
 
 ALTER TABLE session_receipts ADD COLUMN IF NOT EXISTS conflicted boolean NOT NULL DEFAULT false;
+-- NULL for historical receipts until their transcript is re-ingested.
+ALTER TABLE session_receipts ADD COLUMN IF NOT EXISTS delivery_turn integer
+    CHECK (delivery_turn >= 0);
 ALTER TABLE retrieval_log ADD COLUMN IF NOT EXISTS declared_session text;
 ALTER TABLE feedback ADD COLUMN IF NOT EXISTS declared_session text;
 -- Track inference that depends on a logged delivery so revocation can retract it.

@@ -170,6 +170,9 @@ class TestUsage:
                            VALUES ('claude:s','guru','claude','2026-11-16T09:55:00+00:00',
                                    '2026-11-16T10:40:00+00:00')""")
         _expose(db, used, at=datetime(2026, 11, 16, 10, 5, tzinfo=timezone.utc))
+        db.execute("""UPDATE exposures SET source_log = (
+            SELECT id FROM retrieval_log WHERE query = 'how to deploy')
+            WHERE claim_id = %s AND via = 'writer'""", (used,))
 
         usage.sync(db, log)  # session capture permits deferred exact binding
         m = usage.measures(db, "guru")["miss_rate"]

@@ -157,6 +157,12 @@ def test_a_preference_belongs_to_the_user_not_the_project(db, embed):
 
 
 @pytest.mark.parametrize("correction,claim", [
+    ("No, for this specific project I prefer tabs for indentation.",
+     "The user prefers tabs for indentation."),
+    ("No, in our newly migrated repository I prefer tabs for indentation.",
+     "The user prefers tabs for indentation."),
+    ("No, I prefer tabs for indentation.",
+     "The user prefers tabs in the currently checked-out codebase."),
     ("No, that file name is wrong for this project. Report files here are always "
      "named rpt_YYYYMMDD.md directly under reports/.",
      "Report files in this project are always named rpt_YYYYMMDD.md under reports/."),
@@ -335,10 +341,12 @@ def test_a_hook_injected_brief_is_attributed_through_the_query_log(db, embed, tm
     s = Session("hermes", "h-77", [
         Turn("user", "write up today's numbers", ts=T0),
         Turn("tool_call", "", tool="write_file",
-             args={"path": "reports/rpt_20261116.md", "content": "…"}, ts=T0),
+             args={"path": "reports/rpt_20261116.md", "content": "…"},
+             ts="2026-11-16T10:01:00+00:00"),
         Turn("assistant", "Saved the report as reports/rpt_20261116.md, named per the "
-             "rpt_YYYYMMDD.md convention for report files.", ts=T0)],
-        project="guru", started_at=T0, ended_at=T0)
+             "rpt_YYYYMMDD.md convention for report files.",
+             ts="2026-11-16T10:02:00+00:00")],
+        project="guru", started_at=T0, ended_at="2026-11-16T10:02:00+00:00")
     assert writer.ingest(db, s)["used"] == 1
     db.commit()
     assert usage.measures(db, "guru")["dead_weight"]["never_retrieved"] == 0

@@ -212,32 +212,37 @@ def _ts(iso: str | None) -> datetime | None:
     return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
 
 
-def attribute_uses(s: sessions.Session, shown: list[tuple[str, str]] | None = None
+def attribute_uses(s: sessions.Session,
+                   shown: list[tuple[str, str, int, datetime | None]] | None = None
                    ) -> list[tuple[str, int, str | None]]:
     """(claim id, turn, ts) for each claim the session was shown and then
     visibly acted on. One per claim: the first later turn that echoes it.
 
     A claim is "shown" by a claimbase tool result in the transcript, or — via
-    `shown`, (id, text) pairs from the query log — by a brief the harness
-    injected through a hook, which leaves no tool call behind. Those stand
-    for the whole session: a brief is context from the first turn on.
+    `shown`, (id, text, delivery turn, earliest timestamp) tuples from the
+    query log. Receipts establish turn order; log-only deliveries require a
+    strictly later timestamp. Missing/ambiguous ordering earns no credit.
     """
     out: list[tuple[str, int, str | None]] = []
     done: set[str] = set()
-    seen: list[tuple[int, int, dict]] = [
-        (-1, len(s.turns), {"id": cid, "claim": text}) for cid, text in (shown or [])]
+    seen = [(after, len(s.turns), {"id": cid, "claim": text}, not_before)
+            for cid, text, after, not_before in (shown or [])]
     for i, t in enumerate(s.turns):
         if t.role != "tool_result" or sessions.claimbase_call(t) not in ("recall", "brief"):
             continue
-        seen += [(i, min(len(s.turns), i + 1 + USE_LOOKAHEAD), row)
+        seen += [(i, min(len(s.turns), i + 1 + USE_LOOKAHEAD), row, None)
                  for row in sessions.returned_claims(t)]
-    for i, end, row in seen:
+    for i, end, row, not_before in seen:
         cid = _uuid_or_none(row.get("id"))
         words = _distinct(row.get("claim") or "")
         if not cid or cid in done or len(words) < USE_MIN_TOKENS:
             continue
         for j in range(i + 1, end):
             later = s.turns[j]
+            if not_before is not None:
+                when = _ts(later.ts)
+                if when is None or when <= not_before:
+                    continue
             if later.role == "assistant":
                 body = later.text
             elif later.role == "tool_call" and not sessions.claimbase_call(later):
@@ -313,39 +318,64 @@ def ingest(conn, s: sessions.Session) -> dict:
                 n_trig += 1
 
         # A receipt is accepted only from a harness-associated tool result.
-        for turn in s.turns:
+        for index, turn in enumerate(s.turns):
             if (turn.role != "tool_result" or not turn.receipt or
                     not turn.receipt_tool or sessions.claimbase_call(turn) != turn.receipt_tool):
                 continue
-            cur.execute("""INSERT INTO session_receipts (call_id, session_id, corpus, tool)
-                VALUES (%s,%s,%s,%s) ON CONFLICT (call_id) DO UPDATE
+            cur.execute("""INSERT INTO session_receipts
+                (call_id, session_id, corpus, tool, delivery_turn)
+                VALUES (%s,%s,%s,%s,%s) ON CONFLICT (call_id) DO UPDATE
                 SET conflicted = session_receipts.conflicted OR
                     (session_receipts.session_id, session_receipts.corpus, session_receipts.tool)
-                    IS DISTINCT FROM (EXCLUDED.session_id, EXCLUDED.corpus, EXCLUDED.tool)""",
-                (turn.receipt, s.id, corpus, turn.receipt_tool))
+                    IS DISTINCT FROM (EXCLUDED.session_id, EXCLUDED.corpus, EXCLUDED.tool) OR
+                    (session_receipts.delivery_turn IS NOT NULL AND
+                     session_receipts.delivery_turn <> EXCLUDED.delivery_turn),
+                    delivery_turn = EXCLUDED.delivery_turn""",
+                (turn.receipt, s.id, corpus, turn.receipt_tool, index))
         from . import usage
         usage.resolve_receipts(conn)
         cur.execute(
-            """SELECT DISTINCT h.claim_id::text, c.content, l.id
+            """SELECT DISTINCT h.claim_id::text, c.content, l.id, l.ts,
+                               l.call_id::text, l.tool
                  FROM retrieval_log l
                  JOIN retrieval_hits h ON h.log_id = l.id
                  JOIN claims c ON c.id = h.claim_id
                 WHERE l.tool IN ('brief', 'recall') AND l.corpus = %s
-                  AND l.canonical_session = %s ORDER BY l.id""", (corpus, s.id))
+                  AND l.canonical_session = %s AND l.error IS NULL
+                ORDER BY l.id""", (corpus, s.id))
         shown = cur.fetchall()
-        sources = {cid: log_id for cid, _, log_id in shown}
-        direct = {cid for cid, _, _ in attribute_uses(s)}
-        uses = attribute_uses(s, [(cid, text) for cid, text, _ in shown])
+        uses = {cid: (turn, ts, None) for cid, turn, ts in attribute_uses(s)}
+        direct = set(uses)
+        for cid, text, log_id, logged_at, receipt, tool in shown:
+            after = next((i for i, t in enumerate(s.turns)
+                          if receipt and t.role == 'tool_result' and
+                          t.receipt == receipt and t.receipt_tool == tool and
+                          sessions.claimbase_call(t) == tool), None)
+            cutoff = logged_at if after is None else None
+            if after is None and cutoff is None:
+                continue
+            for claim, turn, ts in attribute_uses(
+                    s, [(cid, text, after if after is not None else -1, cutoff)]):
+                if claim not in direct and (claim not in uses or turn < uses[claim][0]):
+                    uses[claim] = (turn, ts, log_id)
+        # Re-ingestion must also repair credit written by older ordering
+        # heuristics, not merely avoid inserting new unsupported credit.
+        cur.execute("""DELETE FROM exposures WHERE session_id = %s AND via = 'writer'
+            AND source_log IS NOT NULL AND NOT (claim_id = ANY(%s::uuid[]))""",
+            (s.id, list(uses)))
         n_used = 0
-        for cid, turn, ts in uses:
+        for cid, (turn, ts, source) in uses.items():
             cur.execute(
                 """INSERT INTO exposures (claim_id, kind, session_id, turn, at, via, dedupe, source_log)
                    SELECT id, 'used', %s, %s, coalesce(%s, now()), 'writer', %s, %s
                      FROM claims WHERE id = %s
-                   ON CONFLICT (claim_id, kind, dedupe) DO UPDATE SET source_log = NULL
-                     WHERE exposures.source_log IS NOT NULL AND EXCLUDED.source_log IS NULL""",
+                   ON CONFLICT (claim_id, kind, dedupe) DO UPDATE
+                     SET source_log = EXCLUDED.source_log, turn = EXCLUDED.turn, at = EXCLUDED.at
+                     WHERE exposures.source_log IS NOT NULL AND
+                       (exposures.source_log, exposures.turn)
+                       IS DISTINCT FROM (EXCLUDED.source_log, EXCLUDED.turn)""",
                 (s.id, turn, _ts(ts), f"session:{s.id}",
-                 None if cid in direct else sources.get(cid), cid),
+                 source, cid),
             )
             n_used += cur.rowcount
 
@@ -418,7 +448,10 @@ def _claim_corpus(corpus: str, kind: str | None, role: str,
     """
     if corpus == projects.USER_SCOPE or kind != "preference" or role != "user":
         return corpus
-    local = r"\b(?:(?:this|the|our|current|working) (?:project|repository|repo|codebase)|here)\b"
+    # Any project reference is enough to retain local scope. Matching an
+    # adjacent determiner+noun misses qualifiers such as "this specific
+    # project"; false negatives on global preferences are safer than leakage.
+    local = r"\b(?:projects?|repository|repositories|repos?|codebases?|workspaces?|here)\b"
     combined = evidence + "\n" + claim
     if re.search(local, combined, re.I) or re.search(
             rf"(?<![\w-]){re.escape(corpus)}(?![\w-])", combined, re.I):

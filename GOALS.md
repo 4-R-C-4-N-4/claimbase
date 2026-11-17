@@ -164,11 +164,12 @@ itself.
 
 ## 6. Known holes
 
-- **Integrated review blocks merge.** The local-scope lexical guard still
-  misses wording such as "for this specific project"; it can widen a local
-  preference to `self`. Session-matched recall logs can also credit text from
-  before delivery as inferred use. Both were reproduced before publication.
-  Keep the PR draft until repaired, re-reviewed and affected evidence rerun.
+- **Post-review model execution still gates merge.** Project-qualifier scope
+  widening and pre-delivery inference were reproduced and fixed, including
+  stale credit, alternate-source revocation and per-recall reporting seams.
+  Regressions and independent confirmation pass; keep the PR draft until fresh
+  smoke/full/repeated execution validates the changed implementation. Previous
+  sandbox scores remain historical, not evidence for these fixes.
 - **Re-extraction resurrects amended claims.** An extractor-version bump
   rebuilds extracted claims wholesale; a PR that superseded one of them is not
   replayed. PRs need to be re-applied after extraction the way captured

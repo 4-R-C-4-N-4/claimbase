@@ -158,8 +158,12 @@ def resolve_receipts(conn):
                       (SELECT count(*) FROM feedback f WHERE f.call_id = b.call_id) = 1""")
         replacement = """SELECT l.id FROM retrieval_log l
             JOIN retrieval_hits h ON h.log_id = l.id
+            JOIN session_receipts r ON r.call_id = l.call_id
+                AND r.session_id = x.session_id AND r.corpus = l.corpus
+                AND r.tool = l.tool AND NOT r.conflicted
             WHERE h.claim_id = x.claim_id AND l.canonical_session = x.session_id
               AND l.tool IN ('brief', 'recall') AND l.error IS NULL
+              AND r.delivery_turn < x.turn
             ORDER BY l.ts, l.id LIMIT 1"""
         cur.execute(f"""UPDATE exposures x SET source_log = ({replacement})
             WHERE x.via = 'writer' AND x.source_log IS NOT NULL
@@ -239,7 +243,16 @@ def measures(conn, project: str, since: datetime | None = None) -> dict:
                 EXISTS (
                   SELECT 1 FROM retrieval_hits h JOIN exposures x ON x.claim_id = h.claim_id
                    WHERE h.log_id = l.id AND x.kind = 'used'
-                     AND x.via = 'writer' AND x.session_id = l.canonical_session AND x.at >= l.ts - interval '1 minute' AND x.at <= l.ts + %(win)s
+                     AND x.via = 'writer' AND x.session_id = l.canonical_session
+                     AND x.at <= l.ts + %(win)s
+                     AND (
+                       EXISTS (SELECT 1 FROM session_receipts b
+                         WHERE b.call_id = l.call_id AND b.session_id = x.session_id
+                           AND b.corpus = l.corpus AND b.tool = l.tool
+                           AND NOT b.conflicted AND b.delivery_turn < x.turn)
+                       OR (x.source_log = l.id AND x.at > l.ts AND NOT EXISTS
+                         (SELECT 1 FROM session_receipts b WHERE b.call_id = l.call_id))
+                     )
                 ) AS used,
                 EXISTS (
                   SELECT 1 FROM feedback f

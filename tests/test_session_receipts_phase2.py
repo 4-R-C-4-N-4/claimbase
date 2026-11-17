@@ -96,7 +96,9 @@ def test_retrieval_inference_requires_same_canonical_session(db):
         lid = uuid.uuid4()
         db.execute("INSERT INTO retrieval_log (id,ts,corpus,tool,canonical_session,n_results) VALUES (%s,now() - interval '1 minute','guru','recall',%s,1)", (lid, sid))
         db.execute("INSERT INTO retrieval_hits (log_id,claim_id,rank,claim_corpus) VALUES (%s,%s,0,'guru')", (lid, claim))
-    db.execute("INSERT INTO exposures (claim_id,kind,session_id,at,via,dedupe) VALUES (%s,'used','hermes:same',now(),'writer','exact')", (claim,))
+    db.execute("""INSERT INTO exposures (claim_id,kind,session_id,at,via,dedupe,source_log)
+        SELECT %s,'used','hermes:same',now(),'writer','exact',id FROM retrieval_log
+        WHERE canonical_session = 'hermes:same'""", (claim,))
     report = usage.measures(db, 'guru')['miss_rate']
     assert (report['used'], report['unknown']) == (1, 1)
 
@@ -137,6 +139,60 @@ def test_claude_extracts_receipt_before_clipping(tmp_path):
     assert result.receipt == receipt
     assert sessions.returned_claims(result)[0]['id'] == claim
     assert len(result.text) < 5000
+
+
+@pytest.mark.parametrize('tool', ['recall', 'brief'])
+def test_logged_delivery_cannot_credit_text_before_its_receipt(db, tmp_path, tool):
+    from claimbase import usage, writer
+    from conftest import seed_claim
+    text = 'Deploy using the signed release artifact from the staging bucket.'
+    claim = seed_claim(db, text)
+    receipt = str(uuid.uuid4())
+    s = sessions.Session('hermes', 'ordered', [
+        sessions.Turn('assistant', text),
+        sessions.Turn('tool_result', '', tool='mcp__claimbase__' + tool,
+                      receipt=receipt, receipt_tool=tool, claimbase_results=[])], project='guru')
+    writer.ingest(db, s)
+    path = tmp_path / 'log'
+    _write_log(path, receipt=receipt, claim=claim, tool=tool)
+    usage.sync(db, path)
+    assert writer.ingest(db, s)['used'] == 0
+    assert usage.measures(db, 'guru')['inference']['claim_uses'] == 0
+
+
+def test_reingest_retracts_old_pre_delivery_inference(db, tmp_path):
+    from claimbase import usage, writer
+    from conftest import seed_claim
+    text = 'Deploy using the signed release artifact from the staging bucket.'
+    claim = seed_claim(db, text)
+    receipt = str(uuid.uuid4())
+    s = sessions.Session('hermes', 'upgrade', [sessions.Turn('assistant', text),
+        sessions.Turn('tool_result', '', tool='mcp__claimbase__recall',
+                      receipt=receipt, receipt_tool='recall', claimbase_results=[])], project='guru')
+    writer.ingest(db, s)
+    path = tmp_path / 'log'
+    _write_log(path, receipt=receipt, claim=claim)
+    usage.sync(db, path)
+    db.execute('''INSERT INTO exposures (claim_id, kind, session_id, turn, via, dedupe, source_log)
+        SELECT %s, 'used', %s, 0, 'writer', %s, id FROM retrieval_log''',
+        (claim, s.id, 'session:' + s.id))
+    assert usage.measures(db, 'guru')['inference']['claim_uses'] == 1
+    writer.ingest(db, s)
+    assert usage.measures(db, 'guru')['inference']['claim_uses'] == 0
+
+
+@pytest.mark.parametrize('ts', [None, '2026-11-16T10:00:00+00:00', '2026-11-16T09:59:00+00:00'])
+def test_log_only_delivery_without_later_timestamp_stays_unknown(db, tmp_path, ts):
+    from claimbase import usage, writer
+    from conftest import seed_claim
+    text = 'Deploy using the signed release artifact from the staging bucket.'
+    claim = seed_claim(db, text)
+    path = tmp_path / 'log'
+    _write_log(path, canonical='hermes:no-order', claim=claim, ts='2026-11-16T10:00:00+00:00')
+    usage.sync(db, path)
+    s = sessions.Session('hermes', 'no-order', [sessions.Turn('assistant', text, ts=ts)], project='guru')
+    assert writer.ingest(db, s)['used'] == 0
+    assert usage.measures(db, 'guru')['miss_rate']['unknown'] == 1
 
 
 def test_log_only_writer_inference_is_revoked_when_receipt_conflicts(db, tmp_path):
@@ -182,6 +238,48 @@ def test_revocation_keeps_inference_supported_by_another_valid_delivery(db, tmp_
     usage.sync(db, path)
     assert usage.measures(db, 'guru')['inference']['claim_uses'] == 1
     assert db.execute("SELECT source_log FROM exposures WHERE via='writer'").fetchone()[0] != source
+
+
+def test_report_does_not_credit_recall_after_an_earlier_supported_action(db, tmp_path):
+    from claimbase import usage, writer
+    from conftest import seed_claim
+    text = 'Deploy using the signed release artifact from the staging bucket.'
+    claim = seed_claim(db, text)
+    early, late = [str(uuid.uuid4()) for _ in range(2)]
+    turns = [sessions.Turn('tool_result', '', tool='mcp__claimbase__recall',
+             receipt=r, receipt_tool='recall', claimbase_results=[]) for r in (early, late)]
+    s = sessions.Session('hermes', 'report-order', [turns[0],
+        sessions.Turn('assistant', text, ts='2026-11-16T10:00:30+00:00'), turns[1]], project='guru')
+    writer.ingest(db, s)
+    path = tmp_path / 'log'
+    _write_log(path, receipt=early, claim=claim, ts='2026-11-16T10:00:00+00:00')
+    _write_log(path, receipt=late, claim=claim, ts='2026-11-16T10:01:00+00:00')
+    usage.sync(db, path)
+    assert writer.ingest(db, s)['used'] == 1
+    report = usage.measures(db, 'guru')['miss_rate']
+    assert (report['used'], report['unknown']) == (1, 1)
+
+
+def test_revocation_cannot_replace_credit_with_a_later_delivery(db, tmp_path):
+    from claimbase import usage, writer
+    from conftest import seed_claim
+    text = 'Deploy using the signed release artifact from the staging bucket.'
+    claim = seed_claim(db, text)
+    early, late = [str(uuid.uuid4()) for _ in range(2)]
+    turns = [sessions.Turn('tool_result', '', tool='mcp__claimbase__recall',
+             receipt=r, receipt_tool='recall', claimbase_results=[]) for r in (early, late)]
+    s = sessions.Session('hermes', 'ordered', [turns[0],
+        sessions.Turn('assistant', text), turns[1]], project='guru')
+    writer.ingest(db, s)
+    path = tmp_path / 'log'
+    for receipt in (early, late):
+        _write_log(path, receipt=receipt, claim=claim)
+    usage.sync(db, path)
+    assert writer.ingest(db, s)['used'] == 1
+    assert db.execute('SELECT turn FROM exposures WHERE source_log IS NOT NULL').fetchone() == (1,)
+    writer.ingest(db, sessions.Session('hermes', 'conflicting', [turns[0]], project='guru'))
+    usage.sync(db, path)
+    assert usage.measures(db, 'guru')['inference']['claim_uses'] == 0
 
 
 def test_canonical_harness_collision():
@@ -282,9 +380,10 @@ def test_same_project_concurrent_session_cannot_credit_neighbor(db, tmp_path):
     claim = seed_claim(db, text)
     path = tmp_path / 'log'
     for sid in ('a', 'b'):
-        _write_log(path, canonical='hermes:' + sid, claim=claim)
+        _write_log(path, canonical='hermes:' + sid, claim=claim, ts='2026-11-16T10:00:00+00:00')
     usage.sync(db, path)
-    writer.ingest(db, sessions.Session('hermes', 'a', [sessions.Turn('assistant', text)], project='guru'))
+    writer.ingest(db, sessions.Session('hermes', 'a', [sessions.Turn(
+        'assistant', text, ts='2026-11-16T10:01:00+00:00')], project='guru'))
     writer.ingest(db, sessions.Session('hermes', 'b', [], project='guru'))
     m = usage.measures(db, 'guru')['miss_rate']
     assert (m['used'], m['unknown']) == (1, 1)

@@ -96,7 +96,7 @@ The hashes identify those artifacts but do not make them remotely downloadable.
 
 ## Limits and next steps
 
-### Integrated review: blocked, publish as draft
+### Initial integrated review: blocked, published as draft
 
 The independent pre-publication review found two merge blockers, both reproduced
 by the parent against the staged implementation:
@@ -115,6 +115,32 @@ invalidate an integrated spec sign-off. The PR remains draft. Repair with
 regressions, re-review, and rerun evidence affected by behavioral changes before
 advancing. A nonblocking review suggestion is to reject malformed decoded query
 log record types cleanly rather than abort synchronization.
+
+### Follow-up: fixes approved, fresh execution pending
+
+The project-noun guard now retains any explicit project/repository/codebase
+reference locally, rather than requiring an adjacent determiner. This is
+deliberately conservative, including false negatives on genuinely global
+preferences mentioning projects; it is not a semantic scope classifier.
+
+Logged inference now requires a preceding exact receipt position, or a strictly
+later valid timestamp when no transcript receipt establishes order. Missing or
+equal timestamps remain unknown. Reingestion retracts stale unsupported credit,
+and source selection retains the delivery actually supporting the action.
+Migration 010 adds nullable receipt delivery_turn; conflicting positions fail
+closed. Revocation can preserve an alternate source only if its receipt preceded
+the credited action. Review also exposed the same ordering defect in reporting;
+each recall now needs its own ordered support instead of a one-minute slack.
+
+Parent-observed red regressions cover all these defects. The current full gate
+is **295 passed, 2 skipped**, with the same live-corpus test excluded. Independent
+confirmation returned spec PASS and quality APPROVED, with no findings. That
+review ran static and in-memory boundary probes, not PostgreSQL integration;
+the PostgreSQL gate was executed by the parent. Only scratch schema changed.
+The PR remains draft until fresh real-model smoke/full/repeated execution. The
+scores above and portable evidence are preserved historical observations; they
+have not been relabeled as results from the fixes. Malformed-log robustness is
+still a nonblocking follow-up.
 
 This is repeatable success on a small synthetic integration suite. It is not
 statistical significance, proof of causal use of individual claims, validation
