@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from baselines import to_gold_ref  # noqa: E402
 from claimbase.core.store import connect  # noqa: E402
+from claimbase.extract import TEACHER_MODEL  # noqa: E402
 from claimbase.recall import recall  # noqa: E402
 
 SRC = Path(__file__).parent / "questions.md"
@@ -95,7 +96,7 @@ def adjudicate(true_s: str, wrong_s: str, record: str) -> str:
     from claimbase.llm import call_llm
 
     reply = call_llm(
-        provider="llamacpp", model="Qwen3.5-27B-UD-Q4_K_XL.gguf",
+        provider="llamacpp", model=TEACHER_MODEL,
         system=ADJUDICATE,
         prompt=f"STATEMENT A: {true_s}\n\nSTATEMENT B: {wrong_s}\n\nRECORD: {record[:900]}",
         max_tokens=64, timeout=180,

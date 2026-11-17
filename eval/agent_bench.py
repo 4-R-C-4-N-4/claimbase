@@ -39,12 +39,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from baselines import load_gold  # noqa: E402
+from claimbase.extract import TEACHER_MODEL  # noqa: E402
 from claimbase.llm import call_llm  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 PYTHON = ROOT / ".venv" / "bin" / "python"
 REPOS = ["/home/ivy/Work/guru", "/home/ivy/Work/guru-web", "/home/ivy/Work/rellm"]
-MODEL = "Qwen3.5-27B-UD-Q4_K_XL.gguf"
+MODEL = TEACHER_MODEL
 MAX_TOKENS = 2048
 MAX_TURNS = 3
 

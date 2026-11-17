@@ -3,6 +3,101 @@
 Running record of measured results. The Phase 0 go/no-go verdict lands here too,
 including if it says the claims column lost.
 
+## 2026-11-16 — Fair local-model rerun completed, including repetitions
+
+Parent verified all raw trial reports, their requested/attempted counts,
+terminal teaching states, task and collection checks, and empty error lists.
+
+| Batch | No-memory task passes | Memory task passes | Memory collection passes | Execution errors |
+|---|---|---|---|---|
+| Expanded set, one trial | 2/9 | 9/9 | 9/9 | 0 |
+| Four-scenario subset, three fresh trials | 1/12 | 12/12 | 12/12 | 0 |
+
+The subset is report-naming, changed-rule and both opposing projects. Its
+memory results were 4/4 in each fresh trial, with control 0/4, 0/4 and 1/4.
+Changed-rule checks establish the old rule before correction, supersede all
+established old claims and leave only the new standing rule active. Each
+opposing project has its own active convention, the other convention is
+present in the shared store, own-scope delivery actually occurs and no foreign
+scope is delivered. The full trial also passes one-off exception, irrelevant
+memory and tool-evidence trust checks. The separate changed-rule smoke passed
+with and without memory; it is not pooled into either denominator above.
+
+Full: eval/.sandbox/run-1794872065318604373-325610/results.json.
+Repeated: eval/.sandbox/run-1794873563806443250-358746/results.json.
+Supervisor: eval/.sandbox/durable-1794871598411867092/status.json.
+
+The supervisor finished completed, phase3_pass=true, stopped its own model
+and exited successfully. About 37.73 GiB remained free. The producer's full
+and repeated batch status is fail because of control task failures, not an
+execution error. All isolated configs remain local/custom with no fallback,
+built-in memory disabled and equivalent confined file tools. Previous failed
+and interrupted trials are retained separately, not repaired or pooled.
+
+This establishes repeatable behavior in this small synthetic sandbox. It
+does not establish statistical significance, representative real-project
+improvement, or causal use of a particular delivered claim. Phase 4 retrieval
+pressure and Phase 5 real-project shadow evaluation remain unrun. Post-repair
+Phase 3 integration sign-off is still pending; no live rollout is justified.
+
+## 2026-11-16 — Harness capability failures are not a memory score
+
+The post-scope-fix reruns did not establish memory effectiveness. One full
+trial ran out of disk because each isolated Hermes home provisioned its own
+dependency tree. Several teaching sessions also reached the 25-tool-turn
+guard while trying to rename files. Inspecting the actual recorded tool
+manifest established that Bonsai was given replace-only patch, not V4A file
+deletion; shell access was deliberately unavailable. Guidance in SOUL.md was
+also suppressed by --ignore-rules. These are harness defects, not evidence
+that Bonsai cannot retain a learned rule. Preserve those runs as invalid
+comparisons rather than pooling them with valid outcomes.
+
+Both experimental arms now receive the same narrowly confined rename_file
+and delete_file tools from a dedicated stdio MCP server. No terminal or
+write-memory tools were added. Exact roots and toolsets, traversal/symlink
+refusal, no-overwrite behavior and real protocol-level operations are tested.
+Neutral capability guidance is explicitly preloaded as a job-local skill;
+hidden house rules remain absent. An independent review approved the
+confinement with limits; its audit gap was fixed with flushed attempt records
+and paired success/error records, including rejected calls. Audit unavailability
+refuses before mutation. Relevant read-only configuration assertions were
+strengthened. Full scratch gate: 284 passed, 2 skipped (live-store-dependent
+test_mcp_sandbox.py excluded); whitespace check clean.
+
+The changed-rule smoke at
+eval/.sandbox/run-1794871600477356276-318443/ subsequently passed. Bonsai successfully invoked
+rename_file for the first correction; trusted audit and disk readback confirm
+the original filename is gone and the replacement report exists. This verifies
+the formerly impossible operation; the completed memory checks and repeated
+outcomes are reported above. Shared package cache and a 10-GiB disk reserve
+were active throughout; all prior artifacts are preserved.
+
+## 2026-11-16 — Expanded memory sandbox exposed scope widening
+
+Nine scenarios, one completed trial: independent task outcomes control 2/9,
+memory 9/9; combined task and collection checks memory 6/9; infrastructure
+errors 0. Artifacts: `eval/.sandbox/run-1794837793542577352-153992/results.json`.
+Do not summarize this as nine successful memory scenarios: report naming became
+a global `self` claim, then reached both opposing-project scopes. The three
+collection failures correctly expose that contamination. Changed-rule,
+one-off exception and tool-forgery checks passed in this trial. Rechecking the
+changelog artifacts against the expanded 48-case interpreter kept the original
+control failure and memory pass.
+
+The writer routed every judge-labeled `preference` into `self`, even when the
+human correction explicitly said “this project.” Four deterministic regression
+cases failed before a conservative evidence-based scope guard was added.
+Personal preferences can still be global, but automatic widening now requires
+first-person user evidence without explicit project-local qualifiers in the
+source or distilled claim. This English-language guard is not a general proof
+of semantic scope correctness. Ambiguous wording is kept local. Independent
+Codex review approved the mitigation. Full scratch test gate: 266 passed,
+2 skipped (live-store-dependent test file excluded), diff whitespace check clean.
+The opposite-project checker now requires actual own-scope delivery as well as
+absence of foreign delivery. A clean full run and three repeated subset trials
+are in progress; no post-fix model result is established yet.
+
+
 ---
 
 ## 2026-08-08 — Baselines established (P0.0)
@@ -698,3 +793,245 @@ q013 remains 0.000 for claims and 0.387 for rg despite being the question entity
 resolution was built for. The entities are correctly separated now; what is missing
 is a claim that states which one production uses, and the corpus does not contain
 one. Resolution made the distinction *representable*, not *answerable*.
+
+## 2026-08-21 — The reviewer eval, and the ranking's turn to be wrong
+
+The first sustained live traffic: the hermes reviewer (local Qwen3.8) ran ~42
+mechanism-phrased queries over the whole guru workbook through the MCP server,
+every one logged with its full response. Grading them against the store settled
+the standing attribution question: **the compiler is mostly fine; retrieval was
+the bottleneck.** Nearly every miss had active, *embedded*, on-target claims
+that lost the top-5 — the corpus-toml rule (missed under two phrasings, cosine
+ranks 1–2 for the query), node-15 publish, node-01/04, `--respect-reviewed`.
+Only three true supply gaps surfaced: the AGENTS.md GPU rule (extraction drop,
+now `assert:gpu-release`), node-08's mechanism (5 thin claims vs node-03's 24+),
+and the drift-remedy sentence.
+
+What the traffic exposed, and what shipped for it (commit `recall:` this date):
+
+- **Phrase sensitivity** — vector-only candidates missed distinctive-phrase
+  matches → lexical OR-of-lexemes leg over a new tsvector index (migration 007),
+  fused into one pool.
+- **Doc-naming queries** — "what does docs/ingest/03-acquire.md say", "workbook
+  node 3": content claims don't repeat their own path → provenance candidate leg
+  + W_REF, with node-number → filename translation.
+- **Scaffold crowding** — "documents §X" claims took 7 of 8 slots on a
+  failure-modes query → penalized (0.45×), not excluded.
+- **Cross-revision near-dups** — same fact from adjacent SHAs both active,
+  twice in one top-5 → token-Jaccard collapse at result time.
+- **Boosts as vetoes** — a linked cos-0.69 claim buried an unlinked cos-0.83
+  one; the q016/q014 note above called this shape early → W_ENTITY 0.8→0.55
+  plus a cosine-leader guarantee: the two most similar claims always make the
+  cut, standing orders everything above them.
+- **timeline was ILIKE-only** — "edge review node 14" returned empty against a
+  corpus full of node-14 history → semantic fallback, `matched_by` in the
+  response.
+
+Scoreboard: original 16 questions nDCG 0.407 → 0.43 with mislead 0.273 →
+**0.000**; the gold set grew to 27 with 11 regression questions taken straight
+from the reviewer log (q017–q027), and the expanded set lands at 0.488 / 0.000.
+The query log did exactly what it was built for: real questions from a real
+agent turned into the regression set the harvest could not supply.
+
+### What is still wrong
+
+q023 (chunk-id as citation) stays 0.000 — genuine vocabulary mismatch between
+question and claim, the class no lexical trick fixes; it wants either a better
+embedding or a captured claim that says it in answer-shaped words. Claims from
+banner-retired docs stay active and unmarked (retirement leaves no git deletion
+for valid_to to key on). Node-08 remains thin in the store; that is extraction
+depth, not ranking, and a targeted re-extract of the readability-gate doc is the
+fix. And the recall weights have now been adjusted while watching this larger
+scoreboard — 27 questions is better than eight, but the docstring's honesty
+clause still applies.
+
+
+---
+
+## 2026-11-16 — Twelve weeks of silence, and what trigger selection found
+
+Written while starting the memory-layer branch ([GOALS.md](docs/GOALS.md)). Two things were
+measured before any of it was built; neither is a scoreboard.
+
+### Nobody has asked the store anything since August
+
+`claimbase-db` exited two months ago and was never restarted. The query log
+holds 75 calls in total: 73 on 2026-08-21 (the reviewer eval above) and 2 on
+2026-08-26. The nightly compile has not run either: the crontab entry is
+there, no cron daemon is active on this machine, and `logs/cron-compile.log`
+was never created.
+
+Why the silence, checked against the harnesses' own records rather than
+guessed:
+
+| harness | wired | told to ask | claimbase calls, ever | sessions since 2026-08-26 |
+|---|---|---|---|---|
+| hermes `reviewer` | yes | yes — SOUL.md: "ask the compiled memory first" | 224 tool messages | 0 (last 2026-08-21) |
+| hermes `guru-dev` | yes | yes, same section | 4 | 3, all on 2026-08-26 |
+| hermes `driver` | yes | no | 0 | 0 (last 2026-08-20) |
+| hermes default profile | yes (root `config.yaml`) | no | **0** | **192** |
+| Claude Code | no | — | 0 | daily |
+
+Two things are visible, and they are separate.
+
+**Wired and told to ask, an agent asks.** The reviewer did, 224 times. **Wired
+and not told, it never does**: the default profile has had the tool available
+for 192 sessions since August and has not called it once. (Of the 21 recent
+default sessions that record their tool list, none lists a claimbase tool;
+whether the server fails to load there was not checked, so "available" may be
+generous.) Retrieval quality cannot matter to a caller that does not call.
+
+**And the callers that did ask stopped running.** The work moved to the
+default profile and to Claude Code; the store's absence went unnoticed because
+nothing still in use depended on it. Memory was attached to five profiles
+instead of to the work — the RFC's own motivation, demonstrated on its
+predecessor.
+
+That shapes the branch. `brief` is one call at session start that asks nothing
+of the agent's judgment, so an unprompted agent still gets memory; projects
+resolve from the working directory, so wiring is per harness and not per
+profile; and `usage report` opens with an activity line that reads zero when
+zero is the truth.
+
+One gap in the log itself: responses carried no claim ids, so it could say what
+was asked and never which claims were used. Fixed going forward; the 75
+historical lines are matched to claims by exact text where the claim still
+exists.
+
+### Selection, run over 145 real hermes sessions (no model)
+
+`sessions.segment` over the 145 most recent hermes sessions with at least two
+user messages — 50,698 turns. Three passes:
+
+| pass | user-role turns | corrections | decisions | tool failures |
+|---|---|---|---|---|
+| first rules | 1,460 | 105 | 65 | 191 |
+| harness notices removed | 1,054 | 36 | 31 | 191 |
+| two rules tightened | 1,054 | 30 | 17 | 191 |
+
+**406 of 1,460 "user" turns were not the user** (28%). Hermes writes bracketed
+notices into the user role — `[ASYNC DELEGATION BATCH COMPLETE …]`,
+`[CONTEXT COMPACTION — REFERENCE ONLY]`, `[System: …]` — and a subagent's report
+is dense with "don't" and "instead". They accounted for 69 of the first 105
+corrections. This matters past selection noise: a user turn is the one kind of
+evidence allowed to back a PR that merges against a human claim, so text the
+harness put in that role would have carried human authority. Role attribution
+is now structural *and* filtered, and the filter is a test.
+
+**Tool failures outnumber every user trigger four to one**, and read as
+transient (a build error, a missing path). Judging each would spend most of the
+model budget on the lowest-value trigger. A failure is now judged only when it
+is similar to something the store holds — the RFC's own wording, "implicates a
+claim the agent acted on" — and otherwise recorded as an episode and left.
+The threshold (cosine 0.6) is a guess.
+
+**The remaining triggers are sparse: 47 across 145 sessions.** One in three
+sessions has a correction or a decision at all. Need-driven collection will be
+slow to fill a store, by design; whether it fills it with better claims than
+extraction did is the question `yield per trigger` exists to answer, and it
+cannot be answered until sessions are submitted and a judge has run.
+
+### Not measured
+
+- **The judge.** Its prompt has run only against a scripted stand-in. Durable
+  rate per rule, and whether its claims are self-contained, are unknown.
+- **Every threshold in `writer.py`** — duplicate 0.92, promote 0.86, failure
+  0.6, use-overlap 0.5. Chosen by argument. `claimbase replay` is the
+  instrument for tuning them.
+- **Correction recall.** The selector's precision was read by eye from samples;
+  what it misses was not looked at.
+- **Stable claim ids against the real corpus.** The import path now keeps
+  unchanged claims in place (GOALS decision 11). Tested on a scratch database,
+  not on the 11.6k-claim store, which was down.
+
+---
+
+## 2026-11-16 — Hermes + Bonsai: a correction survived a fresh session
+
+`eval/sandbox_hermes.py run`, Ternary-Bonsai-2-27B-PQ2_0, 65,536-token
+context, RTX 3090 only. Completed in approximately nine minutes, exit 0.
+The same local model acted as working agent and writer's judge. Three
+scripted corrections; fresh project copies and fresh sessions for probes.
+Hermes's own memory and user profile were disabled in both arms, ambient
+project rules excluded, and file access confined to the current working copy.
+Only `recall` was exposed over MCP; transcript submission was hook-owned.
+
+| House rule | No memory | Claimbase brief |
+|---|---|---|
+| Reports use `reports/rpt_YYYYMMDD.md` | fail | pass |
+| Overrides go in `config/local.toml`; generated defaults stay unchanged | pass | pass |
+| Code changes get an Unreleased changelog entry | fail | pass |
+| **Total** | **1/3** | **3/3** |
+
+Checked the output files, not the agent's assurances. The report contained the
+requested skipped-tagger explanation; the config probe set `max_retries = 5`
+in local overrides while defaults retained 3; the code probe defined
+`truncate` and added its changelog entry. All nine Hermes sessions finalized.
+All six captured teaching/probe sessions were stamped `sandbox`; no terminal
+or built-in memory tool was called. Brief logs show claim counts
+`0, 0, 0, 3, 3, 3`: three empty teaching briefs, then three populated probes.
+The writer produced the three intended standing practices from the actual
+user corrections. No hand-authored claims or explicit helpful feedback were
+inserted into this completed run.
+
+### Integration defects the first real run exposed
+
+Earlier attempts were discarded, not pooled with this result.
+
+- Hermes's coding posture overrode the config's default file-only toolset.
+  The runner now pins `--toolsets` explicitly and excludes ambient rules.
+- A one-shot CLI left a home-scoped gateway alive; deleting/reusing its home
+  caused an empty SQLite store / missing `sessions` table. Each experiment now
+  has a unique directory, and session lookup tolerates pre-schema startup.
+- Write-only confinement let the agent read the runner or other scenarios.
+  The guard now confines reads and writes to `sessions.cwd`, including V4A
+  patch paths, and fails closed.
+- The finalize hook's `cwd` was the gateway checkout, not the work. Capture
+  also ignored `CLAIMBASE_PROJECT`, and the Hermes reader preferred the git
+  root over the actual cwd. Sessions landed in `hermes-agent`, leaving the
+  intended sandbox brief empty. All three scoping mistakes are fixed; a
+  regression test exercises the real SQLite-to-spool CLI path. The scored
+  comparison above is a complete fresh rerun after those fixes, not repaired
+  data from the rejected attempt.
+- Exposing the whole MCP server let the model submit its own summary. The
+  experiment now exposes only recall, so the writer sees harness transcripts.
+- The launcher interpreted the agent environment's `TEMP` scratch path as a
+  numeric temperature. `TEMP=1.0 LLM_GPUS=0 llm bonsai` avoids that collision.
+
+### The usage proxy failed even though the task outcomes passed
+
+The final report recorded **zero inferred uses**, **100% miss rate** for two
+nonempty recalls, and 0% yield for correction-derived claims. These are not
+measurements of this experiment's task success. Applying `attribute_uses`
+directly to the archived probe transcripts reproduced the zeros: the best
+single-turn overlap with each relevant rule was 2/9 distinctive words for
+report naming, 4/10 for config overrides, and 4/9 for the changelog rule.
+All miss the fixed 0.5 threshold, despite the verified artifacts. The report
+name also instantiates a date template rather than repeating its literal
+`YYYYMMDD` token. No threshold was tuned after observing this result.
+
+Separately, `usage.measures` associates recall coverage/use by project and
+elapsed time rather than requiring an exact session match. Concurrent sessions
+can therefore affect the classification. Usage-derived miss/yield numbers are
+not an acceptance gate until attribution is calibrated against artifact-level
+outcomes and session joins are tightened. Dead weight and leak rate were both
+0% in this single-project fixture; that does not validate cross-project
+isolation against adversarial inputs.
+
+### Limits and artifacts
+
+This is one synthetic, three-case integration run, not statistical evidence of
+general improvement, a real-session judge evaluation, or the daily-use gate.
+The config rule was already followed in its control; the incremental wins
+were report naming and changelog discipline. No owner gate was crossed: no
+live-store startup, migration, compile, or normal-profile rewiring.
+
+- Result: `eval/results-sandbox-hermes.json` (generated, gitignored).
+- Run directory: `eval/.sandbox/run-1794822231257260818-87995/`.
+- Full CLI transcript: that directory's `logs/hermes.log`; hook responses:
+  `logs/mcp-queries.jsonl`; normalized transcripts: `spool/done/`.
+- Five new regression tests pass. Broader isolated-HOME suite:
+  `171 passed, 2 skipped`, excluding `tests/test_mcp_sandbox.py`, whose existing
+  checks depend on the live-store setup. Skips: absent live memory scope and
+  missing PR cache. `git diff --check` passes.
+

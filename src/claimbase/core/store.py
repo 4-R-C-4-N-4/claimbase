@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 from dataclasses import asdict
 from typing import Iterable
 
@@ -22,6 +23,23 @@ DSN = os.environ.get("CLAIMBASE_DSN", "postgresql://claimbase:claimbase@localhos
 
 def connect(dsn: str | None = None) -> psycopg.Connection:
     return psycopg.connect(dsn or DSN, autocommit=False)
+
+
+# Namespace for derived claim ids. Fixed forever: changing it re-keys the store.
+_CLAIM_NS = uuid.UUID("6f1d3c0a-58a2-4c1e-9d55-c1a1b45e0001")
+
+
+def stable_claim_id(event_id, kind, content: str) -> uuid.UUID:
+    """A claim's identity, derived from what it says and where it came from.
+
+    Adapter-derived claims used to get a fresh uuid4 on every import, because
+    `replace_claims` deleted and re-inserted them. That was invisible while
+    nothing referred to a claim by id. The memory layer does — an exposure, a
+    retrieval hit and a PR target all name a claim — and a nightly compile
+    would have orphaned every one of them. Same event, same kind, same text is
+    the same claim, and now has the same id.
+    """
+    return uuid.uuid5(_CLAIM_NS, f"{event_id}|{kind}|{content}")
 
 
 class Store:
@@ -74,36 +92,65 @@ class Store:
         Extractor-derived claims are expensive and survive, invalidated only by an
         extractor-version bump, which `extract_run` handles by its own WHERE clause.
         """
+        # Rows an adapter did not produce are not this method's to touch: the
+        # extractor's (expensive), and the memory layer's (a PR amendment or a
+        # writer claim, which no re-import can regenerate).
+        mine = "NOT (meta ? 'extractor_version') AND NOT (meta ? 'memory')"
+        new = {}
+        for c in claims:
+            new.setdefault(stable_claim_id(event_id, str(c.kind), c.content), c)
         with self.conn.cursor() as cur:
-            # A claim about to be deleted may have superseded others. The FK is
-            # ON DELETE SET NULL so the delete succeeds, but that would leave those
-            # claims marked `superseded` while pointing at nothing — a state where
-            # recall hides them and no rule will ever reconsider them. Revert them
-            # to active first and let supersession decide again.
-            cur.execute(
-                """UPDATE claims SET status = 'active', superseded_by = NULL,
-                          valid_to = NULL, meta = meta - 'superseded_rule'
-                    WHERE superseded_by IN (
-                        SELECT id FROM claims
-                         WHERE event_id = %s AND NOT (meta ? 'extractor_version'))""",
-                (event_id,),
-            )
-            cur.execute(
-                "DELETE FROM claims WHERE event_id = %s AND NOT (meta ? 'extractor_version')",
-                (event_id,),
-            )
+            cur.execute("SELECT corpus FROM events WHERE id = %s", (event_id,))
+            row = cur.fetchone()
+            corpus = row[0] if row else "guru"
+            cur.execute(f"SELECT id FROM claims WHERE event_id = %s AND {mine}", (event_id,))
+            gone = [r[0] for r in cur.fetchall() if r[0] not in new]
+            if gone:
+                # A claim about to be deleted may have superseded others. The FK is
+                # ON DELETE SET NULL so the delete succeeds, but that would leave
+                # those claims marked `superseded` while pointing at nothing — a
+                # state where recall hides them and no rule will ever reconsider
+                # them. Revert them to active first and let supersession decide
+                # again.
+                cur.execute(
+                    """UPDATE claims SET status = 'active', superseded_by = NULL,
+                              valid_to = NULL, meta = meta - 'superseded_rule'
+                        WHERE superseded_by = ANY(%s)""",
+                    (gone,),
+                )
+                cur.execute("DELETE FROM claims WHERE id = ANY(%s)", (gone,))
             n = 0
-            for c in claims:
+            for cid, c in new.items():
+                # Unchanged claims are kept in place rather than re-inserted, so
+                # what the store has learned about them survives a re-import:
+                # status, the supersession link, the embedding, exposures, and
+                # any PR that targeted them. Only what the adapter owns is
+                # refreshed.
                 cur.execute(
                     """
                     INSERT INTO claims (id, corpus, event_id, subject_text, predicate,
                         content, valid_from, valid_to, asserted_at, status, confidence,
                         claim_kind, trust, corroborated, meta)
                     VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (id) DO UPDATE SET
+                        subject_text = EXCLUDED.subject_text,
+                        predicate    = EXCLUDED.predicate,
+                        valid_from   = EXCLUDED.valid_from,
+                        valid_to     = CASE WHEN claims.status = 'active'
+                                            THEN EXCLUDED.valid_to ELSE claims.valid_to END,
+                        asserted_at  = EXCLUDED.asserted_at,
+                        confidence   = EXCLUDED.confidence,
+                        trust        = EXCLUDED.trust,
+                        corroborated = EXCLUDED.corroborated,
+                        meta         = EXCLUDED.meta || CASE
+                                         WHEN claims.meta ? 'superseded_rule'
+                                         THEN jsonb_build_object('superseded_rule',
+                                                                 claims.meta->'superseded_rule')
+                                         ELSE '{}'::jsonb END
                     """,
                     (
-                        c.id,
-                        "guru",
+                        cid,
+                        corpus,
                         event_id,
                         c.subject,
                         c.predicate,

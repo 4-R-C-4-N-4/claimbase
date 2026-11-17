@@ -46,6 +46,18 @@ def _parse_ts(s: str | None) -> datetime | None:
         return None
 
 
+def _analysis(d: dict) -> list[dict]:
+    """The analysis field arrives in two shapes: the todo CLI's bare list, and a
+    `{"entries": [...]}` wrapper one agent-written ticket introduced (guru
+    d9bb3b9a, 2026-08-21) — which, iterated naively, yields dict KEYS and
+    crashed the import. Normalize both; a non-dict entry is kept as content
+    rather than dropped, because the wrapper case carries real analysis."""
+    a = d.get("analysis") or []
+    if isinstance(a, dict):
+        a = a.get("entries") or []
+    return [e if isinstance(e, dict) else {"content": str(e)} for e in a]
+
+
 def _author_trust(author: str | None, fallback: Trust) -> Trust:
     """An analysis entry names its own author, which may differ from the ticket's."""
     if not author:
@@ -134,7 +146,7 @@ class TodoStore:
         parts = [f"[{d.get('type')}/{d.get('state')}] {d.get('summary', '')}"]
         if d.get("description"):
             parts.append(str(d["description"]))
-        for a in d.get("analysis") or []:
+        for a in _analysis(d):
             parts.append(
                 f"({a.get('type')}, {a.get('confidence')}, {a.get('author')}) "
                 f"{a.get('content', '')}"
@@ -149,7 +161,13 @@ class TodoStore:
 
     def structured_claims(self, event: Event) -> Iterable[Claim]:
         d = event.meta["raw"]
-        base_trust = _TRUST_FROM_SOURCE.get((d.get("source") or {}).get("type"), Trust.UNKNOWN)
+        # `source` is `{"type": human|agent|test}` from the todo CLI; the same
+        # agent-written ticket that wrapped analysis (see _analysis) writes it
+        # as a bare string ("corpus-quality"), which names a workflow, not an
+        # author — that maps to no tier and lands on UNKNOWN, the honest floor.
+        src = d.get("source") or {}
+        src_type = src.get("type") if isinstance(src, dict) else None
+        base_trust = _TRUST_FROM_SOURCE.get(src_type, Trust.UNKNOWN)
         res = d.get("resolution") or {}
         # A linked commit is evidence outside the author's own prose.
         corroborated = bool(res.get("commit"))
@@ -184,7 +202,7 @@ class TodoStore:
                 )
             )
 
-        for a in d.get("analysis") or []:
+        for a in _analysis(d):
             yield apply_cap(
                 Claim(
                     event_id=event.id,

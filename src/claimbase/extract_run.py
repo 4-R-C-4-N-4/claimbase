@@ -1,8 +1,10 @@
 """Run the teacher over prose events and store the claims.
 
-Resumable by construction: an event already carrying claims from this extractor
-version is skipped, so an interrupted run costs only the passage in flight. That
-matters at ~7s/passage over ~1,800 events.
+Resumable by construction: an event recorded in extraction_progress for this
+extractor version is skipped, so an interrupted run costs only the passage in
+flight. That matters at ~7s/passage over ~1,800 events. Progress is recorded
+only for responses that parsed — an unparseable response is retried next run,
+never silently recorded as read (migrations/006_extraction_progress.sql).
 
 Sub-threshold extractions land in `claims_review`, never in `claims` — precision
 over recall, because a hallucinated claim is worse than a missing one.
@@ -17,7 +19,7 @@ import time
 import uuid
 
 from .core.store import connect
-from .extract import EXTRACTOR_VERSION, SYSTEM, extract
+from .extract import EXTRACTOR_VERSION, SYSTEM, TEACHER_MODEL, extract, parsed_ok
 
 # Sources whose content is prose worth extracting from. run_artifacts is tabular
 # and git_log is one-line subjects already captured structurally; neither has
@@ -26,30 +28,37 @@ PROSE_SOURCES = ("markdown_docs", "todo_store", "pull_requests", "agent_memory")
 
 THRESHOLD = 0.6
 
+# Pending = prose the current extractor version has not READ, per
+# extraction_progress — not "has no surviving claims", which re-extracted every
+# legitimately-empty event forever. Shared with `claimbase status` so the count
+# it reports and the work this run selects can never disagree.
+PENDING_SQL = """
+    SELECT e.id, e.content, e.captured_at
+    FROM events e
+    WHERE e.corpus = %s AND e.source = ANY(%s) AND length(e.content) >= %s
+      AND NOT EXISTS (
+        SELECT 1 FROM extraction_progress p
+        WHERE p.event_id = e.id AND p.version = %s
+      )
+    ORDER BY length(e.content) DESC
+"""
 
-def main() -> None:
+
+def pending_events(conn, corpus: str, min_len: int = 200):
+    with conn.cursor() as cur:
+        cur.execute(PENDING_SQL, (corpus, list(PROSE_SOURCES), min_len, EXTRACTOR_VERSION))
+        return cur.fetchall()
+
+
+def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--corpus", default="guru")
     ap.add_argument("--limit", type=int, default=0, help="0 = all pending")
     ap.add_argument("--min-len", type=int, default=200)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     conn = connect()
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT e.id, e.content, e.captured_at
-            FROM events e
-            WHERE e.corpus = %s AND e.source = ANY(%s) AND length(e.content) >= %s
-              AND NOT EXISTS (
-                SELECT 1 FROM claims c
-                WHERE c.event_id = e.id AND c.meta->>'extractor_version' = %s
-              )
-            ORDER BY length(e.content) DESC
-            """,
-            (args.corpus, list(PROSE_SOURCES), args.min_len, EXTRACTOR_VERSION),
-        )
-        pending = cur.fetchall()
+    pending = pending_events(conn, args.corpus, args.min_len)
     if args.limit:
         pending = pending[: args.limit]
 
@@ -65,7 +74,7 @@ def main() -> None:
             """INSERT INTO extractor_runs (id, corpus, version, model, temperature,
                    seed, prompt_sha, n_events, meta)
                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-            (run_id, args.corpus, EXTRACTOR_VERSION, "Qwen3.5-27B-UD-Q4_K_XL.gguf",
+            (run_id, args.corpus, EXTRACTOR_VERSION, TEACHER_MODEL,
              float(os.environ.get("TEMP", 0.2)),
              int(os.environ["SEED"]) if os.environ.get("SEED") else None,
              hashlib.sha256(SYSTEM.encode()).hexdigest()[:16],
@@ -79,10 +88,17 @@ def main() -> None:
 
     for i, (eid, content, captured_at) in enumerate(pending, 1):
         try:
-            claims, _raw = extract(content)
+            claims, raw = extract(content)
         except Exception as e:
             failed += 1
             print(f"    {i}/{len(pending)}  ERROR {type(e).__name__}: {e}", flush=True)
+            continue
+
+        # No well-formed array in the response: retry next run, never record it
+        # as read — recording it would be the silent gap, not the retry.
+        if not claims and not parsed_ok(raw):
+            failed += 1
+            print(f"    {i}/{len(pending)}  unparseable response, will retry", flush=True)
             continue
 
         with conn.cursor() as cur:
@@ -108,6 +124,11 @@ def main() -> None:
                                  "run_id": str(run_id)})),
                 )
                 kept += 1
+            cur.execute(
+                """INSERT INTO extraction_progress (event_id, version, run_id, n_claims)
+                   VALUES (%s,%s,%s,%s) ON CONFLICT DO NOTHING""",
+                (eid, EXTRACTOR_VERSION, run_id, len(claims)),
+            )
         conn.commit()
 
         if i % 25 == 0 or i == len(pending):

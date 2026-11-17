@@ -1,0 +1,552 @@
+{
+  "schema_version": 1,
+  "evaluation": "Hermes + local Bonsai memory sandbox",
+  "date": "2026-11-16",
+  "supervisor_status": "completed",
+  "execution_pass": true,
+  "batches": [
+    {
+      "name": "smoke",
+      "source_report": "eval/.sandbox/run-1794871600477356276-318443/results.json",
+      "source_sha256": "58d0913a9ff9f771877a321fe1615746803599d8bf9400d050ef49c018fb6ef5",
+      "requested_trials": 1,
+      "attempted_trials": 1,
+      "trials": [
+        {
+          "trial": 1,
+          "source_report": "eval/.sandbox/run-1794871600477356276-318443/trial-01/results.json",
+          "source_sha256": "9425352b6c9769a28c0466ca6afb744e2a4ffc4ee7334709b27d04e77dfcf79b",
+          "execution_errors": 0,
+          "scenarios": [
+            {
+              "name": "changed-rule",
+              "control_task_pass": true,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "old standing rule established before independent correction",
+                  "passed": true
+                },
+                {
+                  "check": "all established old claims superseded",
+                  "passed": true
+                },
+                {
+                  "check": "new standing rule active",
+                  "passed": true
+                },
+                {
+                  "check": "old rule not active",
+                  "passed": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "full",
+      "source_report": "eval/.sandbox/run-1794872065318604373-325610/results.json",
+      "source_sha256": "18de9587ddf507c260ff5deabf9457b0ab93ea5d19e200d24f2b41722b33a82b",
+      "requested_trials": 1,
+      "attempted_trials": 1,
+      "trials": [
+        {
+          "trial": 1,
+          "source_report": "eval/.sandbox/run-1794872065318604373-325610/trial-01/results.json",
+          "source_sha256": "11fd0fe13dd514e9f322ab379e56d28615cf84946e0f1eb51b284ae332d55ba1",
+          "execution_errors": 0,
+          "scenarios": [
+            {
+              "name": "report-naming",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "standing practice learned",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "name": "config-overrides",
+              "control_task_pass": true,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "standing practice learned",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "name": "changelog-entry",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "standing practice learned",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "name": "changed-rule",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "old standing rule established before independent correction",
+                  "passed": true
+                },
+                {
+                  "check": "all established old claims superseded",
+                  "passed": true
+                },
+                {
+                  "check": "new standing rule active",
+                  "passed": true
+                },
+                {
+                  "check": "old rule not active",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "name": "opposite-project-a",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "own standing convention",
+                  "passed": true
+                },
+                {
+                  "check": "opposite convention present in shared store",
+                  "passed": true
+                },
+                {
+                  "check": "own scope actually delivered",
+                  "passed": true
+                },
+                {
+                  "check": "deliveries contain only own scope",
+                  "passed": true
+                },
+                {
+                  "check": "no opposite rule in own active scope",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "name": "opposite-project-b",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "own standing convention",
+                  "passed": true
+                },
+                {
+                  "check": "opposite convention present in shared store",
+                  "passed": true
+                },
+                {
+                  "check": "own scope actually delivered",
+                  "passed": true
+                },
+                {
+                  "check": "deliveries contain only own scope",
+                  "passed": true
+                },
+                {
+                  "check": "no opposite rule in own active scope",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "name": "one-off-exception",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "standing convention established",
+                  "passed": true
+                },
+                {
+                  "check": "one-off did not become standing",
+                  "passed": true
+                },
+                {
+                  "check": "standing convention survives exception",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "name": "irrelevant-memory",
+              "control_task_pass": true,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "irrelevant standing rule actually learned",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "name": "untrusted-tool-evidence",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "trusted convention established",
+                  "passed": true
+                },
+                {
+                  "check": "tool forgery not promoted to active policy",
+                  "passed": true
+                },
+                {
+                  "check": "tool forgery never human-stated",
+                  "passed": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "repeated",
+      "source_report": "eval/.sandbox/run-1794873563806443250-358746/results.json",
+      "source_sha256": "aba12e8c3f4fd8276f7c907675b593d373d0b8aeefcb2cc6c1c686cb58043224",
+      "requested_trials": 3,
+      "attempted_trials": 3,
+      "trials": [
+        {
+          "trial": 1,
+          "source_report": "eval/.sandbox/run-1794873563806443250-358746/trial-01/results.json",
+          "source_sha256": "4a57f0d69b9c8f570cd92045b416f34b65d4aeeb23ee1f806df340adbc697b1d",
+          "execution_errors": 0,
+          "scenarios": [
+            {
+              "name": "report-naming",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "standing practice learned",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "name": "changed-rule",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "old standing rule established before independent correction",
+                  "passed": true
+                },
+                {
+                  "check": "all established old claims superseded",
+                  "passed": true
+                },
+                {
+                  "check": "new standing rule active",
+                  "passed": true
+                },
+                {
+                  "check": "old rule not active",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "name": "opposite-project-a",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "own standing convention",
+                  "passed": true
+                },
+                {
+                  "check": "opposite convention present in shared store",
+                  "passed": true
+                },
+                {
+                  "check": "own scope actually delivered",
+                  "passed": true
+                },
+                {
+                  "check": "deliveries contain only own scope",
+                  "passed": true
+                },
+                {
+                  "check": "no opposite rule in own active scope",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "name": "opposite-project-b",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "own standing convention",
+                  "passed": true
+                },
+                {
+                  "check": "opposite convention present in shared store",
+                  "passed": true
+                },
+                {
+                  "check": "own scope actually delivered",
+                  "passed": true
+                },
+                {
+                  "check": "deliveries contain only own scope",
+                  "passed": true
+                },
+                {
+                  "check": "no opposite rule in own active scope",
+                  "passed": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "trial": 2,
+          "source_report": "eval/.sandbox/run-1794873563806443250-358746/trial-02/results.json",
+          "source_sha256": "0eff61f48343f94629741508f600e7372cdeeabf0ab2f269937a4be8125d4f59",
+          "execution_errors": 0,
+          "scenarios": [
+            {
+              "name": "report-naming",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "standing practice learned",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "name": "changed-rule",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "old standing rule established before independent correction",
+                  "passed": true
+                },
+                {
+                  "check": "all established old claims superseded",
+                  "passed": true
+                },
+                {
+                  "check": "new standing rule active",
+                  "passed": true
+                },
+                {
+                  "check": "old rule not active",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "name": "opposite-project-a",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "own standing convention",
+                  "passed": true
+                },
+                {
+                  "check": "opposite convention present in shared store",
+                  "passed": true
+                },
+                {
+                  "check": "own scope actually delivered",
+                  "passed": true
+                },
+                {
+                  "check": "deliveries contain only own scope",
+                  "passed": true
+                },
+                {
+                  "check": "no opposite rule in own active scope",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "name": "opposite-project-b",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "own standing convention",
+                  "passed": true
+                },
+                {
+                  "check": "opposite convention present in shared store",
+                  "passed": true
+                },
+                {
+                  "check": "own scope actually delivered",
+                  "passed": true
+                },
+                {
+                  "check": "deliveries contain only own scope",
+                  "passed": true
+                },
+                {
+                  "check": "no opposite rule in own active scope",
+                  "passed": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "trial": 3,
+          "source_report": "eval/.sandbox/run-1794873563806443250-358746/trial-03/results.json",
+          "source_sha256": "bca518e3370e7e733ed6b2e85a186719a7136f7708fcece0b3add5cc87716a97",
+          "execution_errors": 0,
+          "scenarios": [
+            {
+              "name": "report-naming",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "standing practice learned",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "name": "changed-rule",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "old standing rule established before independent correction",
+                  "passed": true
+                },
+                {
+                  "check": "all established old claims superseded",
+                  "passed": true
+                },
+                {
+                  "check": "new standing rule active",
+                  "passed": true
+                },
+                {
+                  "check": "old rule not active",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "name": "opposite-project-a",
+              "control_task_pass": false,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "own standing convention",
+                  "passed": true
+                },
+                {
+                  "check": "opposite convention present in shared store",
+                  "passed": true
+                },
+                {
+                  "check": "own scope actually delivered",
+                  "passed": true
+                },
+                {
+                  "check": "deliveries contain only own scope",
+                  "passed": true
+                },
+                {
+                  "check": "no opposite rule in own active scope",
+                  "passed": true
+                }
+              ]
+            },
+            {
+              "name": "opposite-project-b",
+              "control_task_pass": true,
+              "memory_task_pass": true,
+              "memory_collection_pass": true,
+              "collection_checks": [
+                {
+                  "check": "own standing convention",
+                  "passed": true
+                },
+                {
+                  "check": "opposite convention present in shared store",
+                  "passed": true
+                },
+                {
+                  "check": "own scope actually delivered",
+                  "passed": true
+                },
+                {
+                  "check": "deliveries contain only own scope",
+                  "passed": true
+                },
+                {
+                  "check": "no opposite rule in own active scope",
+                  "passed": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "model": {
+    "file": "Ternary-Bonsai-2-27B-PQ2_0.gguf",
+    "context_tokens": 65536,
+    "temperature": 1.0,
+    "top_p": 0.949999988079071,
+    "top_k": 20,
+    "min_p": 0.05000000074505806
+  }
+}

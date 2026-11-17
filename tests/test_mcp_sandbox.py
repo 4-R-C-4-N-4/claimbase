@@ -76,6 +76,7 @@ def test_write_tool_absent_and_unreachable_by_default() -> None:
     injected instruction, so the call itself must fail."""
     names, body = _run(_tools_and_probe(write=False))
     assert "assert_claim" not in names
+    assert "open_pr" not in names, "a PR is a database write, gated like any other"
     assert "Unknown tool" in body
 
 
@@ -83,6 +84,7 @@ def test_write_tool_absent_and_unreachable_by_default() -> None:
 def test_write_tool_appears_only_when_enabled() -> None:
     names, _ = _run(_tools_and_probe(write=True))
     assert "assert_claim" in names
+    assert "open_pr" in names
 
 
 @pytest.mark.timeout(120)
