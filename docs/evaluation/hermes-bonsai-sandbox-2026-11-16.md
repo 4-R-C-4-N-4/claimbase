@@ -1,6 +1,6 @@
 # Hermes + Bonsai sandbox notes — 2026-11-16
 
-## Result
+## Initial result (historical, before integrated-review fixes)
 
 The expanded sandbox and three fresh subset trials completed with no execution
 errors. The local model served as both working agent and writer's judge.
@@ -75,7 +75,7 @@ result. Likewise, the tool-capability and ENOSPC runs are not model-quality scor
 
 ## Verification and evidence
 
-- Last code gate: **284 passed, 2 skipped**, using isolated HOME and excluding
+- Initial publication code gate: **284 passed, 2 skipped**, using isolated HOME and excluding
   `tests/test_mcp_sandbox.py`, which depends on the real/live corpus. The two
   skips and excluded file are not represented as executed coverage.
 - Real stdio protocol tests verify the two-tool manifest, successful mutations,
@@ -116,7 +116,7 @@ regressions, re-review, and rerun evidence affected by behavioral changes before
 advancing. A nonblocking review suggestion is to reject malformed decoded query
 log record types cleanly rather than abort synchronization.
 
-### Follow-up: fixes approved, fresh execution pending
+### Follow-up: fixes approved and fresh execution passed
 
 The project-noun guard now retains any explicit project/repository/codebase
 reference locally, rather than requiring an adjacent determiner. This is
@@ -137,18 +137,38 @@ is **295 passed, 2 skipped**, with the same live-corpus test excluded. Independe
 confirmation returned spec PASS and quality APPROVED, with no findings. That
 review ran static and in-memory boundary probes, not PostgreSQL integration;
 the PostgreSQL gate was executed by the parent. Only scratch schema changed.
-The PR remains draft until fresh real-model smoke/full/repeated execution. The
-scores above and portable evidence are preserved historical observations; they
-have not been relabeled as results from the fixes. Malformed-log robustness is
-still a nonblocking follow-up.
+Fresh real-model execution subsequently passed on behavioral commit
+`cdd0b94c8c71d7fddd5bb17bda729dc401f0a03a` (checkout `cffeb32061c6d5e3ae7f80723442af7dbc40b067`,
+which adds only run-tracking documentation):
+
+| Post-review batch | Trials | Control tasks | Memory tasks | Memory collection | Execution errors |
+|---|---:|---:|---:|---:|---:|
+| Separate changed-rule smoke | 1 | 1/1 | 1/1 | 1/1 | 0 |
+| Expanded set | 1 | 2/9 | 9/9 | 9/9 | 0 |
+| Fresh four-scenario subset | 3 | 3/12 | 12/12 | 12/12 | 0 |
+
+Each repeat had control 1/4 and memory task+collection 4/4. Parent read every
+report, verified requested/attempted/collected counts and unconditional collection
+assertions, and checked all 73 homes for local/no-fallback and confined-tool
+configuration with built-in memory off. The supervisor reported phase3_pass=true;
+the service exited successfully, stopped its model, and no llama-server remained.
+The 295-pass code gate was rerun after model completion.
+
+Fresh allowlisted evidence, including raw report hashes and behavioral commit:
+[`2026-11-16-hermes-bonsai-post-review.json`](../../eval/evidence/2026-11-16-hermes-bonsai-post-review.json).
+Raw artifacts remain local under durable-1794884707158893256, full
+run-1794885048177527218-440276 and repeated run-1794886541261002247-473186.
+The initial table and evidence remain historical, separate and unmodified;
+they were not relabeled or pooled. Malformed-log robustness is still a
+nonblocking follow-up. No live migration/profile changes or automatic merge.
 
 This is repeatable success on a small synthetic integration suite. It is not
 statistical significance, proof of causal use of individual claims, validation
 of the judge on representative real sessions, or a production rollout decision.
 The agent and judge are the same model; independent code checks the outcomes.
 
-1. Resolve the two integrated-review blockers, rerun affected evidence and
-   obtain Phase 3 integrated spec/quality approval before merge.
+1. Phase 3 review repairs and fresh execution passed; finish PR evidence review
+   before an explicit owner-authorized merge.
 2. Phase 4: retrieval pressure — fixed-budget briefs with distractors, omitted
    relevant rules, recall recovery, superseded claims and foreign-project claims.
    Do not tune ranking just to force seeded targets into the brief.

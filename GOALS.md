@@ -164,12 +164,11 @@ itself.
 
 ## 6. Known holes
 
-- **Post-review model execution still gates merge.** Project-qualifier scope
-  widening and pre-delivery inference were reproduced and fixed, including
-  stale credit, alternate-source revocation and per-recall reporting seams.
-  Regressions and independent confirmation pass; keep the PR draft until fresh
-  smoke/full/repeated execution validates the changed implementation. Previous
-  sandbox scores remain historical, not evidence for these fixes.
+- **Scope recognition remains lexical.** The project-reference noun veto
+  fixes intervening-qualifier leakage conservatively; it can retain genuinely
+  global preferences locally and is not arbitrary semantic scope understanding.
+  Scope and delivery-order fixes passed regressions, independent confirmation
+  and fresh smoke/full/repeated execution; live rollout remains owner-gated.
 - **Re-extraction resurrects amended claims.** An extractor-version bump
   rebuilds extracted claims wholesale; a PR that superseded one of them is not
   replayed. PRs need to be re-applied after extraction the way captured
@@ -201,7 +200,7 @@ itself.
 **Executed:** local Ternary-Bonsai-2-27B as agent and judge, 65,536-token
 context on the 3090. Expanded set: **2/9 task checks without memory, 9/9
 with memory**, with **9/9 collection checks**. Three fresh four-scenario
-subset trials: **1/12 without memory, 12/12 with memory and collection**.
+subset trials: **3/12 without memory, 12/12 with memory and collection**.
 Zero execution errors. The separate changed-rule smoke also passed and is
 not pooled into those denominators. Hermes's built-in memory was disabled.
 
@@ -210,10 +209,12 @@ operations, suppressed capability guidance, dependency-cache disk growth and
 chat-lifetime coupling. Both arms now receive identical confined rename/delete
 tools; no shell or memory-writing tools were added. Failed/contaminated runs
 remain separate. See the [sandbox notes](docs/evaluation/hermes-bonsai-sandbox-2026-11-16.md)
-and [portable evidence](eval/evidence/2026-11-16-hermes-bonsai.json).
+and [post-review portable evidence](eval/evidence/2026-11-16-hermes-bonsai-post-review.json).
+These fresh results cover behavioral commit cdd0b94; initial pre-review evidence
+remains separately preserved, not pooled or overwritten.
 
 This verifies **synthetic sandbox execution**, not any owner gate in §4 or
-causal use of a particular claim. Next: integrated Phase 3 review, retrieval
+causal use of a particular claim. Next: PR review/owner merge, retrieval
 pressure, then capture-only real-project shadow evaluation. The judge still
 needs representative real-session validation and daily use still needs a week
 of evidence. No live store or normal Hermes profile was changed.
