@@ -368,7 +368,9 @@ def _dispatch_inner(name: str, args: dict) -> Any:
     if name == "brief":
         from .brief import DEFAULT_BUDGET, brief as _brief
 
-        budget = max(100, min(int(args.get("budget_tokens") or DEFAULT_BUDGET), 4000))
+        # Floor at the default: the brief is cheap, and callers trimming it to
+        # ~100 tokens were observed starving sessions of most standing rules.
+        budget = max(DEFAULT_BUDGET, min(int(args.get("budget_tokens") or DEFAULT_BUDGET), 4000))
         with connect() as conn:
             out = _brief(conn, CORPUS, budget)
         return {"_note": UNTRUSTED, **out}
@@ -567,6 +569,17 @@ def _dispatch_inner(name: str, args: dict) -> Any:
         if not (args.get("project") or args.get("cwd")):
             return {"error": "pass cwd (your working directory) or project to say "
                              "which project this belongs to"}
+        # The user scope reaches every project's brief. A cwd that resolves to
+        # it (a fresh project before `git init`, a scratch dir) must not put
+        # project rules there by accident; it is reachable only by name.
+        from . import projects
+
+        if not args.get("project") and CORPUS == projects.USER_SCOPE:
+            return {"error": f"cwd {args['cwd']!r} is not inside a git repository or a "
+                             "declared project, so the project is unknown. Pass "
+                             "project=<name> (e.g. the directory name), or "
+                             "project='self' only for something about the user that "
+                             "applies across all projects."}
         try:
             kind = Kind(args.get("kind") or "observation")
         except ValueError:

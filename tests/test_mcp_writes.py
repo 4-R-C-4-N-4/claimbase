@@ -90,3 +90,39 @@ def test_instructions_describe_the_write_path_only_when_it_is_enabled():
     assert "assert_claim" in m.instructions(True)
     assert "assert_claim" not in m.instructions(False)
     assert "You do not decide what to remember" in m.instructions(False)
+
+
+def test_a_cwd_outside_any_repository_is_refused_not_filed_as_user_scope(writer_server, db, tmp_path,
+                                                                         monkeypatch):
+    # Observed on a fresh project before `git init`: the resolver fell back to
+    # the user scope and project rules landed in every project's brief.
+    from claimbase import projects
+
+    plain = tmp_path / "not-yet-a-repo"
+    plain.mkdir()
+    # tmp_path may itself sit under some checkout; this case is "no repo".
+    monkeypatch.setattr(projects, "declared", lambda: {})
+    monkeypatch.setattr(projects, "_git_root", lambda path: None)
+    out = writer_server._dispatch("assert", {"text": "Run tests with make check.",
+                                             "kind": "practice", "cwd": str(plain)})
+    assert "error" in out and "project" in out["error"]
+    assert _count(db) == 0
+
+
+def test_user_scope_is_reachable_only_by_naming_it(writer_server, db):
+    out = writer_server._dispatch("assert", {"text": "Ivy prefers terse status reports.",
+                                             "kind": "preference", "project": "self"})
+    assert out["project"] == "self"
+
+
+def test_brief_budget_has_a_floor(writer_server, db, repo):
+    rules = ["Format Python with ruff format before committing.",
+             "Releases are tagged vX.Y.Z from main only.",
+             "Database migrations live in migrations/ and are never edited after merge.",
+             "Integration tests need the scratch Postgres on port 5434.",
+             "User-facing strings go through the i18n catalogue.",
+             "Secrets are read from the environment, never from files in the repo."]
+    for text in rules:
+        writer_server._dispatch("assert", {"text": text, "kind": "practice", "cwd": str(repo)})
+    b = writer_server._dispatch("brief", {"cwd": str(repo), "budget_tokens": 100})
+    assert len(b["claims"]) == 6, "a tiny requested budget must not starve the session-start brief"
