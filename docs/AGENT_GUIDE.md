@@ -31,8 +31,9 @@ This machine has long-term project memory over MCP (`claimbase` tools).
 
 - Session start: call `brief` with `cwd` set to your working directory (leave
   `budget_tokens` at its default). Read what it returns; note the `project`
-  name it resolved. If it resolved to `self`, the directory is not a git repo
-  yet: pass `project=<directory name>` on writes.
+  name it resolved. If the project root has no `.claimbase` file, run
+  `claimbase init` there once (it pins the current name, so a later rename,
+  move or `git init` keeps the same memory) and tell the user to commit it.
 - Before grepping or guessing how something is done here or why, call
   `recall` with a full question (not keywords) and that `project`.
 - Record durable knowledge with `assert_claim(text, kind, cwd=<working dir>)`
@@ -67,9 +68,11 @@ This machine has long-term project memory over MCP (`claimbase` tools).
 
 ## Projects
 
-A repo declared under `corpora/*.toml` maps to that project; any other git repo
-is its own project named after the repository; no repo means the user scope,
-which every project's brief includes. Writes never land there by inference:
+Resolution order: a `.claimbase` marker in the directory or its nearest ancestor
+(`project = "name"`, written by `claimbase init`); a repo declared under
+`corpora/*.toml`; any other git repo, named after the repository; otherwise the
+user scope, which every project's brief includes. Only the marker survives
+renames, moves and starting outside git — run `claimbase init` and commit it. Writes never land there by inference:
 `assert_claim` with a `cwd` outside any repo is refused until a `project` is
 named (`project='self'` only for facts about the user across all projects).
 A fresh project needs no other setup: its first `assert_claim` creates its memory.

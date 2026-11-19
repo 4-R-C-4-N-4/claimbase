@@ -575,9 +575,10 @@ def _dispatch_inner(name: str, args: dict) -> Any:
         from . import projects
 
         if not args.get("project") and CORPUS == projects.USER_SCOPE:
-            return {"error": f"cwd {args['cwd']!r} is not inside a git repository or a "
-                             "declared project, so the project is unknown. Pass "
-                             "project=<name> (e.g. the directory name), or "
+            return {"error": f"cwd {args['cwd']!r} has no .claimbase marker and is not "
+                             "inside a git repository or declared project, so the "
+                             "project is unknown. Run `claimbase init` in the project "
+                             "root (then retry), or pass project=<name>; "
                              "project='self' only for something about the user that "
                              "applies across all projects."}
         try:

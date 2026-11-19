@@ -9,6 +9,10 @@ Resolution, in order:
 
 1. An explicit name. The harness knows where it is running; if it says, that
    is the answer.
+1b. A `.claimbase` marker file in the working directory or the nearest
+   ancestor that has one (`project = "name"`, written by `claimbase init`).
+   It is the one identity that survives `git init`, renames, moves and fresh
+   clones, so it outranks everything below.
 2. A working directory inside a repo that some `corpora/*.toml` declares. Those
    paths are declared, not discovered — three repos (guru, guru-web, rellm)
    are one project because a human wrote that down.
@@ -56,6 +60,32 @@ def declared() -> dict[str, list[Path]]:
     return out
 
 
+MARKER = ".claimbase"
+
+
+def read_marker(path: Path) -> str | None:
+    """The project a marker file names, or None if it is absent, unreadable
+    or names the user scope (which a directory cannot claim)."""
+    try:
+        with path.open("rb") as fh:
+            name = tomllib.load(fh).get("project")
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    if not isinstance(name, str) or not name.strip():
+        return None
+    name = normalize(name)
+    return None if name == USER_SCOPE else name
+
+
+def marked(path: Path) -> tuple[Path, str] | None:
+    """The nearest ancestor (or `path` itself) with a valid marker."""
+    for p in (path, *path.parents):
+        f = p / MARKER
+        if f.is_file() and (name := read_marker(f)):
+            return p, name
+    return None
+
+
 def _git_root(path: Path) -> Path | None:
     for p in (path, *path.parents):
         if (p / ".git").exists():
@@ -80,6 +110,8 @@ def resolve(project: str | None = None, cwd: str | Path | None = None) -> str:
         here = here.resolve()
     except OSError:
         pass
+    if m := marked(here):
+        return m[1]
     best: tuple[int, str] | None = None
     for name, paths in declared().items():
         for p in paths:
