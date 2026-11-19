@@ -303,6 +303,44 @@ def cmd_recall(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_init(args: argparse.Namespace) -> int:
+    """Pin a directory tree to a project with a `.claimbase` marker.
+
+    Inside a git repo the marker goes at the repo root and, unless --name is
+    given, records the name the project already resolves to, so existing
+    memory stays attached. In a plain folder it goes in that folder, named
+    after it. Commit the file so clones and renames keep the identity."""
+    from . import projects
+
+    here = Path(args.path or ".").expanduser().resolve()
+    if not here.is_dir():
+        print(f"  not a directory: {here}", file=sys.stderr)
+        return 2
+    root = projects._git_root(here) or here
+    if root.is_file():
+        root = root.parent
+    name = projects.normalize(args.name) if args.name else projects.resolve(cwd=root)
+    if name == projects.USER_SCOPE:
+        if args.name:
+            print("  'self' is the user scope; a directory cannot be pinned to it",
+                  file=sys.stderr)
+            return 2
+        name = projects.normalize(root.name)
+    marker = root / projects.MARKER
+    if marker.exists() and not args.force:
+        current = projects.read_marker(marker)
+        print(f"  {marker} already pins this tree to {current!r}; --force to replace",
+              file=sys.stderr)
+        return 1
+    marker.write_text(
+        "# Claimbase project identity. Commit this file: memory for everything\n"
+        "# under this directory is filed under the name below, whatever the\n"
+        "# directory is called or wherever it is cloned.\n"
+        f'project = "{name}"\n')
+    print(f"  {marker}\n  project: {name}")
+    return 0
+
+
 def cmd_resolve(args: argparse.Namespace) -> int:
     from .resolve import resolve
 
@@ -595,6 +633,11 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("link", help="link claims to the entities they mention")
     p.add_argument("--corpus", default="guru")
     p.set_defaults(fn=cmd_link)
+    p = sub.add_parser("init", help="pin this directory tree to a project (.claimbase marker)")
+    p.add_argument("--name", default=None, help="project name (default: what it resolves to now)")
+    p.add_argument("--path", default=None, help="directory (default: current)")
+    p.add_argument("--force", action="store_true", help="replace an existing marker")
+    p.set_defaults(fn=cmd_init)
     p = sub.add_parser("status", help="compiled state vs sources; what to run next")
     p.add_argument("--corpus", default="guru")
     p.set_defaults(fn=cmd_status)
